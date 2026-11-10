@@ -1,0 +1,204 @@
+'use strict';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cash=n=>Number(n||0).toFixed(1);
+let data=null, draft=[], tab='team', search='', filter='all', saving=false;
+const byId=id=>data?.players?.find(p=>Number(p.id)===Number(id));
+const pos=p=>p?.position==='Вратарь'?'Вратарь':'Полевой';
+const used=()=>draft.reduce((a,e)=>a+Number(byId(e.player_id)?.price||0),0);
+const locked=()=>!data||data.locked;
+function flash(message,isError=false){const el=$('notice');el.innerHTML='<div class="message'+(isError?' error':'')+'">'+esc(message)+'</div>';window.scrollTo({top:0,behavior:'smooth'});}
+async function api(action,payload){
+ const options=action?{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({action,...payload})}:{credentials:'same-origin'};
+ const r=await fetch('/api/handler',options);let result;
+ try{result=await r.json();}catch{throw Error('Сервер вернул неожиданный ответ.');}
+ if(!r.ok)throw Error(result.error||'Ошибка '+r.status);
+ return result;
+}
+async function refresh(){
+ try{data=await api();draft=(data.roster||[]).map(x=>({...x,player_id:Number(x.player_id)}));render();}
+ catch(e){$('content').innerHTML='<section class="panel"><h2>Сайт пока не настроен</h2><p class="subtle">'+esc(e.message)+'</p><p>Подключи Supabase к Vercel и выполни SQL-миграцию.</p></section>';
+ $('round-badge').textContent='Нет соединения';}
+}
+function roomFor(p){
+ if(!data?.user||locked()||draft.some(e=>e.player_id===p.id)||draft.length>=8||used()+Number(p.price)>50)return false;
+ return p.position==='Вратарь'?draft.every(e=>e.slot!=='goalkeeper'):draft.filter(e=>e.slot!=='goalkeeper').length<7;
+}
+function assignFlags(){
+ const playing=draft.filter(e=>e.slot==='goalkeeper'||e.slot==='starter');
+ for(const x of draft)if(x.slot==='bench1'||x.slot==='bench2'){x.is_captain=false;x.is_vice_captain=false;}
+ if(!playing.some(x=>x.is_captain)){
+  const pick=playing.find(x=>x.slot==='starter')||playing[0];if(pick)pick.is_captain=true;
+ }
+ if(!playing.some(x=>x.is_vice_captain)){
+  const pick=playing.find(x=>!x.is_captain);if(pick)pick.is_vice_captain=true;
+ }
+}
+function addPlayer(id){
+ const p=byId(id);if(!p||!roomFor(p))return;
+ const slot=p.position==='Вратарь'?'goalkeeper':draft.filter(e=>e.slot==='starter').length<5?'starter':draft.some(e=>e.slot==='bench1')?'bench2':'bench1';
+ draft.push({player_id:id,slot,is_captain:false,is_vice_captain:false});assignFlags();render();
+}
+function removePlayer(id){
+ if(locked())return;
+ draft=draft.filter(e=>e.player_id!==id);
+ const fields=draft.filter(e=>e.slot==='starter');
+ const bench=draft.filter(e=>e.slot==='bench1'||e.slot==='bench2');
+ // When a starter leaves, fill its vacancy with first available bench player.
+ if(fields.length<5&&bench.length){
+  const replacement=bench.find(e=>e.slot==='bench1')||bench[0];replacement.slot='starter';
+ }
+ const remains=draft.filter(e=>e.slot==='bench1'||e.slot==='bench2');
+ if(remains.length===1)remains[0].slot='bench1';
+ assignFlags();render();
+}
+function changeCaptain(id,which){
+ if(locked())return;
+ const selected=draft.find(e=>e.player_id===id);
+ if(!selected||!['goalkeeper','starter'].includes(selected.slot))return;
+ const key=which==='cap'?'is_captain':'is_vice_captain';
+ const other=which==='cap'?'is_vice_captain':'is_captain';
+ for(const e of draft)e[key]=e.player_id===id;
+ selected[other]=false;
+ render();
+}
+function movePlayer(id){
+ if(locked())return;
+ const e=draft.find(x=>x.player_id===id);if(!e||e.slot==='goalkeeper')return;
+ if(e.slot==='starter'){
+  const substitute=draft.find(x=>x.slot==='bench1')||draft.find(x=>x.slot==='bench2');
+  if(!substitute)return flash('Чтобы поменять игрока основы, нужен запасной.',true);
+  const oldBench=substitute.slot;substitute.slot='starter';e.slot=oldBench;
+ }else{
+  const starter=draft.find(x=>x.slot==='starter');
+  if(!starter)return;
+  const oldBench=e.slot;e.slot='starter';starter.slot=oldBench;
+ }
+ assignFlags();render();
+}
+function swapBench(){
+ if(locked())return;
+ const a=draft.find(x=>x.slot==='bench1'),b=draft.find(x=>x.slot==='bench2');
+ if(a&&b){a.slot='bench2';b.slot='bench1';render();}
+}
+async function saveTeam(){
+ if(!data?.user)return openLogin();
+ if(locked())return flash('Дедлайн уже прошёл.',true);
+ if(draft.length!==8)return flash('Сначала набери 8 игроков.',true);
+ if(!draft.some(x=>x.is_captain)||!draft.some(x=>x.is_vice_captain))return flash('Выбери капитана и вице-капитана.',true);
+ if(saving)return;saving=true;
+ try{const r=await api('save',{roster:draft});await refresh();flash('Состав сохранён на сервере. Использовано трансферов: '+r.transfers+' из 2.');}
+ catch(e){flash(e.message,true);}finally{saving=false;}
+}
+function teamHtml(){
+ if(!data?.user)return '<section class="panel"><h2>Собери свою команду</h2><p class="subtle">Войди по имени и PIN или зарегистрируй нового менеджера. Состав будет храниться в общей базе.</p><button class="primary" data-action="login">Войти / создать менеджера</button></section>';
+ const rows=draft.map(e=>{const p=byId(e.player_id);if(!p)return '';
+  const starter=e.slot==='goalkeeper'||e.slot==='starter';
+  return '<div class="entry"><div class="entry-info"><strong>'+esc(p.name)+'</strong><small>'+esc(pos(p))+' · '+(e.slot==='goalkeeper'?'Вратарь':e.slot==='starter'?'Основа':e.slot==='bench1'?'Запас 1':'Запас 2')+' · '+cash(p.price)+'</small></div>'+
+   '<div class="entry-actions">'+(starter?'<button class="small-btn '+(e.is_captain?'marked':'')+'" data-action="cap" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>К</button><button class="small-btn '+(e.is_vice_captain?'marked':'')+'" data-action="vice" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>ВК</button>':'')+
+   (p.position!=='Вратарь'?'<button class="small-btn" data-action="move" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>'+(starter?'В запас':'В основу')+'</button>':'')+
+   '<button class="small-btn" data-action="remove" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>×</button></div></div>';
+ }).join('');
+ return '<div class="columns"><section class="panel"><h2>Твой состав</h2><p class="muted">На поле — 5 полевых по схеме 1–2–2 и вратарь</p><div class="pitch"><div class="formation">'+
+  '<div class="slot front">'+chip('starter:0','Нападение')+'</div>'+
+  ['mid-left','mid-right','back-left','back-right'].map((c,i)=>'<div class="slot '+c+'">'+chip('starter:'+(i+1),'Основа')+'</div>').join('')+
+  '<div class="slot keeper">'+chip('goalkeeper','Вратарь')+'</div></div></div>'+
+  '<div class="bench">'+chip('bench1','Запас 1')+chip('bench2','Запас 2')+'</div>'+
+  '<div class="actions"><button class="outline" data-action="swap" '+(locked()?'disabled':'')+'>Порядок запаса ⇄</button><button class="primary" data-action="save" '+(locked()?'disabled':'')+'>Сохранить состав</button></div>'+
+  (locked()?'<div class="warning">Тур закрыт: изменения состава недоступны.</div>':'<p class="muted">Изменения становятся действительными только после нажатия «Сохранить состав».</p>')+
+  '</section><section class="panel"><h2>Управление составом</h2><p class="muted">К — капитан, ВК — вице-капитан. Перестановки между основой и запасом бесплатны.</p>'+
+  (rows||'<p class="subtle">Пока нет игроков. Открой рынок.</p>')+
+  '<div class="actions"><button class="primary" data-tab="market">'+(draft.length?'Открыть рынок':'Выбрать игроков')+'</button></div></section></div>';
+}
+function ensureDisplaySlots(){
+ // Assign unique rendering positions for the five unordered starters.
+ let i=0;for(const e of draft){if(e.slot==='starter')e.displaySlot='starter:'+(i++);else e.displaySlot=e.slot;}
+}
+function chip(slot,label){
+ const e=draft.find(x=>x.displaySlot===slot);
+ if(!e)return '<div class="chip placeholder">'+esc(label||'Пусто')+'</div>';
+ const p=byId(e.player_id);return '<div class="chip">'+esc(p?.name||'?')+
+  '<small>'+(e.is_captain?'Капитан · ':e.is_vice_captain?'Вице · ':'')+cash(p?.price)+'</small></div>';
+}
+function marketHtml(){
+ const filtered=(data?.players||[]).filter(p=>p.name.toLowerCase().includes(search.toLowerCase())&&(filter==='all'||(filter==='gk')===(p.position==='Вратарь')));
+ return '<section class="panel"><h2>Рынок игроков</h2><p class="subtle">'+(data?.players?.length||0)+' игроков · бюджет 50.0 · '+(locked()?'Тур закрыт':'Выбирай состав')+'</p>'+
+  '<div class="row"><input class="search" id="search" placeholder="Поиск игрока" value="'+esc(search)+'" /><select id="filter" class="field" style="width:auto"><option value="all" '+(filter==='all'?'selected':'')+'>Все</option><option value="gk" '+(filter==='gk'?'selected':'')+'>Вратари</option><option value="field" '+(filter==='field'?'selected':'')+'>Полевые</option></select></div>'+
+  '<div class="market-list" id="market-list">'+marketRows(filtered)+'</div></section>';
+}
+function marketRows(players){return players.map(p=>{
+ const selected=draft.some(e=>e.player_id===p.id);
+ return '<div class="entry"><div class="entry-info"><strong>'+esc(p.name)+'</strong><small>'+pos(p)+'</small></div><strong class="price">'+cash(p.price)+'</strong>'+
+  '<button class="small-btn" data-action="'+(selected?'remove':'add')+'" data-id="'+p.id+'" '+((selected?!locked():roomFor(p))?'':'disabled')+'>'+(selected?'Убрать':'Добавить')+'</button></div>';
+}).join('')||'<p class="muted">Игроки не найдены.</p>';}
+function leagueHtml(){
+ const people=data?.leaderboard||[];
+ return '<section class="panel"><h2>Таблица менеджеров</h2><p class="muted">Нажми на имя, чтобы посмотреть состав. Чужие составы доступны после дедлайна.</p>'+
+  '<table class="league"><thead><tr><th>№</th><th>Менеджер</th><th>Очки</th></tr></thead><tbody>'+
+  people.map((m,i)=>'<tr><td>'+(i+1)+'</td><td><button class="link" data-action="view" data-id="'+esc(m.id)+'">'+esc(m.username)+'</button></td><td>'+m.points+'</td></tr>').join('')+
+  '</tbody></table>'+(people.length?'':'<p class="muted">Менеджеров пока нет.</p>')+
+  '<div class="warning">Очки появятся после внесения результатов администратором. Интеграция Sreda Eight пока не подключена.</div></section>';
+}
+function rulesHtml(){
+ const scoring=[['Участие','+1'],['Гол полевого','+5'],['Гол вратаря','+10'],['Голевая передача','+3'],['Сухой 10-минутный матч полевого','+1'],['Сухой 10-минутный матч вратаря','+3'],['Отбитый пенальти','+5'],['Незабитый пенальти','−2'],['Автогол','−2'],['Чемпион вечера','+2']];
+ return '<section class="panel rules"><h2>Правила Sreda Fantasy</h2><ul><li>Бюджет — <strong>50.0</strong>. В составе 1 вратарь, 5 полевых в основе и 2 полевых в запасе.</li><li>На каждый тур доступно <strong>2 трансфера</strong>, они не переносятся.</li><li>Дедлайн — <strong>среда, 20:30 Europe/Riga</strong>. После него изменения заблокированы.</li><li>При отсутствии полевого игрока основы вступает присутствующий запасной, по приоритету 1 → 2. Вратарь без замены.</li><li>Капитан получает ×2, если присутствовал. Если нет — ×2 получает присутствующий вице-капитан.</li></ul><h2>Очки за игру</h2><table class="league">'+scoring.map(s=>'<tr><td>'+s[0]+'</td><td>'+s[1]+'</td></tr>').join('')+'</table><div class="warning">Штраф за пропущенные мячи: предварительно −1 за каждые два гола вратаря. Финальная формула очков проверяется перед открытием подсчёта.</div></section>';
+}
+function render(){
+ if(!data)return;
+ ensureDisplaySlots();
+ $('round-badge').textContent=data.round?'Тур №'+data.round.round_number+(data.locked?' · закрыт':' · открыт'):'Тур не создан';
+ $('login-btn').textContent=data.user?data.user.username+' · Выход':'Войти';
+ $('budget').textContent=cash(50-used());$('count').textContent=draft.length+' / 8';
+ $('transfers').textContent=(2-data.transfers)+' / 2';
+ $('deadline-short').textContent=data.round?new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Riga',day:'numeric',month:'short'}).format(new Date(data.round.deadline_at)):'—';
+ document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+ $('content').innerHTML=tab==='team'?teamHtml():tab==='market'?marketHtml():tab==='league'?leagueHtml():rulesHtml();
+}
+function openLogin(){
+ $('modal').hidden=false;
+ $('modal').innerHTML='<div class="dialog"><h2>Вход менеджера</h2><p class="subtle">Первый раз? Выбери «Создать». Уже есть аккаунт? Нажми «Войти».</p><form id="auth-form"><label for="username">Имя менеджера</label><input id="username" class="field" maxlength="40" autocomplete="username" required />'+
+  '<label for="pin">PIN из 6–12 цифр</label><input id="pin" type="password" class="field" inputmode="numeric" minlength="6" maxlength="12" pattern="[0-9]{6,12}" autocomplete="current-password" required />'+
+  '<div class="actions"><button class="primary" type="submit" name="mode" value="login">Войти</button><button class="outline" type="submit" name="mode" value="register">Создать</button><button class="outline" type="button" data-action="close">Отмена</button></div></form><p class="muted">Не используй PIN от банковских карт или других сервисов.</p></div>';
+ $('username').focus();
+}
+async function submitAuth(event){
+ event.preventDefault();const submitter=event.submitter;
+ const action=submitter?.value==='register'?'register':'login';
+ const username=$('username').value.trim(),pin=$('pin').value;
+ try{await api(action,{username,pin});$('modal').hidden=true;$('modal').innerHTML='';await refresh();flash('Ты вошёл как '+username+'.');}
+ catch(e){const old=$('modal').querySelector('.modal-error');if(old)old.remove();$('auth-form').insertAdjacentHTML('beforeend','<p class="message error modal-error">'+esc(e.message)+'</p>');}
+}
+async function openManager(managerID){
+ if(!data?.round)return flash('Тур не создан.',true);
+ try{
+  const response=await fetch('/api/handler?action=roster&manager='+encodeURIComponent(managerID)+'&round='+data.round.id);
+  const payload=await response.json();if(!response.ok)throw Error(payload.error||'Доступ закрыт');
+  const manager=data.leaderboard.find(m=>m.id===managerID);
+  const roster=payload.roster||[];
+  const content=roster.length?roster.map(e=>{const p=byId(e.player_id);
+    return '<div class="entry"><div class="entry-info"><strong>'+esc(p?.name||'?')+'</strong><small>'+esc(e.slot==='goalkeeper'?'Вратарь':e.slot==='starter'?'Основа':e.slot==='bench1'?'Запас 1':'Запас 2')+'</small></div><span>'+esc(e.is_captain?'К':e.is_vice_captain?'ВК':'')+'</span></div>';
+   }).join(''):'<p class="subtle">Состав не сохранён.</p>';
+  $('modal').hidden=false;$('modal').innerHTML='<div class="dialog"><h2>'+esc(manager?.username||'Менеджер')+'</h2>'+content+'<div class="actions"><button class="outline" data-action="close">Закрыть</button></div></div>';
+ }catch(e){flash(e.message,true);}
+}
+async function logout(){try{await api('logout');await refresh();flash('Ты вышел из аккаунта.');}catch(e){flash(e.message,true);}}
+document.addEventListener('click',event=>{
+ const button=event.target.closest('button');if(!button)return;
+ if(button.dataset.tab){tab=button.dataset.tab;render();return;}
+ if(button.id==='login-btn'){if(data?.user)logout();else openLogin();return;}
+ const id=Number(button.dataset.id),action=button.dataset.action;
+ if(action==='login')openLogin();else if(action==='close'){$('modal').hidden=true;$('modal').innerHTML='';}
+ else if(action==='add')addPlayer(id);else if(action==='remove')removePlayer(id);
+ else if(action==='cap'||action==='vice')changeCaptain(id,action);
+ else if(action==='move')movePlayer(id);else if(action==='swap')swapBench();
+ else if(action==='save')saveTeam();else if(action==='view')openManager(button.dataset.id);
+});
+document.addEventListener('input',event=>{
+ if(event.target.id!=='search')return;
+ search=event.target.value;
+ const filtered=(data?.players||[]).filter(p=>p.name.toLowerCase().includes(search.toLowerCase())&&(filter==='all'||(filter==='gk')===(p.position==='Вратарь')));
+ $('market-list').innerHTML=marketRows(filtered);
+});
+document.addEventListener('change',event=>{if(event.target.id==='filter'){filter=event.target.value;render();}});
+document.addEventListener('submit',event=>{if(event.target.id==='auth-form')submitAuth(event);});
+refresh();

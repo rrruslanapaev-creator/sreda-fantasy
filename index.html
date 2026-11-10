@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#0b1713" />
+  <meta name="description" content="Sreda Fantasy — фэнтези-лига мини-футбола по средам" />
+  <title>Sreda Fantasy</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="header">
+      <div class="brand"><span class="brand-ball">✦</span> SREDA <em>FANTASY</em></div>
+      <div class="header-actions"><span id="round-badge" class="badge">Загрузка…</span><button id="login-btn" class="outline">Войти</button></div>
+    </header>
+    <section class="hero"><div class="eyebrow">МИНИ-ФУТБОЛ ПО СРЕДАМ</div><h1>Твоя среда.<br /><span>Твоя команда.</span></h1>
+      <p>Собери восьмёрку, назначь капитана и обыграй друзей в фэнтези-лиге.</p></section>
+    <section class="metrics" aria-label="Показатели команды">
+      <div class="metric"><span>Остаток бюджета</span><strong id="budget">50.0</strong><small>из 50.0</small></div>
+      <div class="metric"><span>Игроков</span><strong id="count">0 / 8</strong><small>1 вратарь · 7 полевых</small></div>
+      <div class="metric"><span>Трансферов</span><strong id="transfers">2 / 2</strong><small>на текущий тур</small></div>
+      <div class="metric"><span>Дедлайн</span><strong id="deadline-short" class="short-value">—</strong><small>20:30 · Рига</small></div>
+    </section>
+    <nav class="nav" aria-label="Разделы">
+      <button class="active" data-tab="team">Моя команда</button><button data-tab="market">Рынок игроков</button><button data-tab="league">Лига</button><button data-tab="rules">Правила</button>
+    </nav>
+    <div id="notice" role="status" aria-live="polite"></div>
+    <main id="content"><div class="panel">Загрузка данных…</div></main>
+    <footer>© Sreda Fantasy · Дедлайн по средам в 20:30 Europe/Riga · Первая онлайн-версия</footer>
+  </div>
+  <div id="modal" hidden></div>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{
+  "name":"sreda-fantasy",
+  "version":"0.1.0",
+  "private":true,
+  "description":"Sreda Fantasy league",
+  "engines":{"node":">=20"},
+  "dependencies":{"@supabase/supabase-js":"^2.57.0"}
+}
