@@ -13,3 +13,16 @@
 .sf-preview strong{font-size:25px;color:#a1f4be}
 .sf-score-list{max-height:680px;overflow:auto}.sf-score-row{width:100%;display:flex;justify-content:space-between;gap:12px;text-align:left;background:transparent;border:0;border-bottom:1px solid #294437;color:#ecfff2;padding:10px 3px}.sf-score-row:hover{background:#234633}.sf-score-row strong{color:#9df1b9}
 @media(max-width:500px){.sf-stats-grid{grid-template-columns:1fr}}
+
+/* Admin market controls */
+.sf-admin-tabs{display:flex;gap:9px;margin:0 0 15px;flex-wrap:wrap}
+.sf-admin-tabs .sf-tab-on{background:#8be7ae;color:#112719;border-color:#8be7ae;font-weight:800}
+.sf-market-list{max-height:700px;overflow-y:auto}
+.sf-market-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #2d4a39}
+.sf-market-person{min-width:0;flex:1;overflow-wrap:anywhere}
+.sf-market-person strong,.sf-market-person small{display:block}
+.sf-market-person small{color:#a5c0b0;font-size:12px}
+.sf-market-edit{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px;color:#a5c0b0}
+.sf-market-edit .field{width:90px;padding:8px}
+.sf-market-row[hidden]{display:none}
+@media(max-width:600px){.sf-market-row{flex-wrap:wrap}.sf-market-person{flex-basis:100%}.sf-market-edit{flex:1}}
