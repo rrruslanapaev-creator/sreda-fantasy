@@ -49,7 +49,11 @@ async function publishedScores(client,round,players){
   if(!round)return {published:false,playerScores:[]};
   const {data:pub,error:pe}=await client.from('round_results_publication')
     .select('published_at').eq('round_id',round.id).maybeSingle();
-  if(pe)throw pe;
+  if(pe){
+    // Keep the existing site readable while migration 003 is being installed.
+    if(['42P01','PGRST205'].includes(pe.code))return {published:false,playerScores:[]};
+    throw pe;
+  }
   if(!pub)return {published:false,playerScores:[]};
   const {data:stats,error:se}=await client.from('player_round_stats')
     .select('player_id,attended,goals,assists,clean_sheets,penalty_saves,penalty_misses,own_goals,goals_conceded,champion')
