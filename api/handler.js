@@ -1,6 +1,7 @@
 // Vercel Node serverless function. ALL Supabase database access stays on this server.
 const {createClient}=require('@supabase/supabase-js');
 const {createHash,randomBytes,scryptSync,timingSafeEqual}=require('node:crypto');
+const scoring=require('./results');
 
 const SESSION_COOKIE='sf_session';
 const sha=x=>createHash('sha256').update(x).digest('hex');
@@ -82,7 +83,8 @@ async function state(client,user){
   const leaderboard=(m.data||[]).map(x=>({id:x.id,username:x.username,
     points:(s.data||[]).filter(v=>v.manager_id===x.id).reduce((sum,v)=>sum+v.points,0)}))
     .sort((a,b)=>b.points-a.points||a.username.localeCompare(b.username,'ru'));
-  return {players:p.data||[],round,locked,user,roster,transfers,leaderboard};
+  const scores=await scoring.publishedScores(client,round,p.data||[]);
+  return {players:p.data||[],round,locked,user,roster,transfers,leaderboard,...scores};
 }
 module.exports=async function handler(req,res){
   if(req.method!=='GET'&&req.method!=='POST')return send(res,405,{error:'Метод не поддерживается'});
@@ -90,6 +92,10 @@ module.exports=async function handler(req,res){
   try{
     const client=db(),user=await currentUser(client,req);
     if(req.method==='GET'){
+      if(req.query.action==='adminResults'){
+        if(!user?.is_admin)return send(res,403,{error:'Нет прав администратора'});
+        return send(res,200,await scoring.adminResults(client,req.query.round));
+      }
       if(req.query.action==='roster'){
         const id=String(req.query.manager||''),roundID=Number(req.query.round);
         if(!/^[a-f0-9-]{36}$/i.test(id)||!Number.isSafeInteger(roundID)||roundID<1)
@@ -143,6 +149,13 @@ module.exports=async function handler(req,res){
       return send(res,200,{ok:true});
     }
     if(!user)return send(res,401,{error:'Сначала войди по имени и PIN.'});
+    if(body.action==='adminSaveResults'||body.action==='adminPublishResults'){
+      if(!user.is_admin)return send(res,403,{error:'Нет прав администратора'});
+      const result=body.action==='adminSaveResults'
+        ?await scoring.saveResults(client,user,body)
+        :await scoring.publishResults(client,user,body);
+      return send(res,200,result);
+    }
     if(body.action==='save'){
       if(!Array.isArray(body.roster)||body.roster.length!==8)
         return send(res,400,{error:'Состав должен состоять из 8 игроков.'});
@@ -151,5 +164,5 @@ module.exports=async function handler(req,res){
       return send(res,200,{ok:true,transfers:e?null:data});
     }
     return send(res,400,{error:'Неизвестная операция'});
-  }catch(e){return error(res,e);}
+  }catch(e){if(e?.status&&e.status>=400&&e.status<500)return send(res,e.status,{error:e.message});return error(res,e);}
 };
