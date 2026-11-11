@@ -137,14 +137,20 @@ function leagueHtml(){
   '<table class="league"><thead><tr><th>№</th><th>Менеджер</th><th>Очки</th></tr></thead><tbody>'+
   people.map((m,i)=>'<tr><td>'+(i+1)+'</td><td><button class="link" data-action="view" data-id="'+esc(m.id)+'">'+esc(m.username)+'</button></td><td>'+m.points+'</td></tr>').join('')+
   '</tbody></table>'+(people.length?'':'<p class="muted">Менеджеров пока нет.</p>')+
-  '<div class="warning">Очки появятся после внесения результатов администратором. Интеграция Sreda Eight пока не подключена.</div></section>';
+  (data?.published?'<h2>Очки футболистов · тур №'+data.round.round_number+'</h2><table class="league"><thead><tr><th>Футболист</th><th>Очки</th></tr></thead><tbody>'+
+    (data.playerScores||[]).map(x=>'<tr><td>'+esc(byId(x.player_id)?.name||'Игрок '+x.player_id)+'</td><td>'+x.points+'</td></tr>').join('')+
+    '</tbody></table>':'<div class="warning">Очки появятся после публикации результатов администратором.</div>')+'</section>';
 }
 function rulesHtml(){
- const scoring=[['Участие','+1'],['Гол полевого','+5'],['Гол вратаря','+10'],['Голевая передача','+3'],['Сухой 10-минутный матч полевого','+1'],['Сухой 10-минутный матч вратаря','+3'],['Отбитый пенальти','+5'],['Незабитый пенальти','−2'],['Автогол','−2'],['Чемпион вечера','+2']];
- return '<section class="panel rules"><h2>Правила Sreda Fantasy</h2><ul><li>Бюджет — <strong>50.0</strong>. В составе 1 вратарь, 5 полевых в основе и 2 полевых в запасе.</li><li>На каждый тур доступно <strong>2 трансфера</strong>, они не переносятся.</li><li>Дедлайн — <strong>среда, 20:30 Europe/Riga</strong>. После него изменения заблокированы.</li><li>При отсутствии полевого игрока основы вступает присутствующий запасной, по приоритету 1 → 2. Вратарь без замены.</li><li>Капитан получает ×2, если присутствовал. Если нет — ×2 получает присутствующий вице-капитан.</li></ul><h2>Очки за игру</h2><table class="league">'+scoring.map(s=>'<tr><td>'+s[0]+'</td><td>'+s[1]+'</td></tr>').join('')+'</table><div class="warning">Штраф за пропущенные мячи: предварительно −1 за каждые два гола вратаря. Финальная формула очков проверяется перед открытием подсчёта.</div></section>';
+ const scoring=[['Участие','+1'],['Гол полевого','+5'],['Гол вратаря','+10'],['Голевая передача','+3'],['Сухой 10-минутный матч полевого','+1'],['Сухой 10-минутный матч вратаря','+3'],['Отбитый пенальти','+5'],['Незабитый пенальти','−2'],['Автогол','−2'],['Чемпион вечера','+2'],['Каждые 2 пропущенных гола команды за весь вечер','−1 каждому футболисту']];
+ return '<section class="panel rules"><h2>Правила Sreda Fantasy</h2><ul><li>Бюджет — <strong>50.0</strong>. В составе 1 вратарь, 5 полевых в основе и 2 полевых в запасе.</li><li>На каждый тур доступно <strong>2 трансфера</strong>, они не переносятся.</li><li>Дедлайн — <strong>среда, 20:30 Europe/Riga</strong>. После него изменения заблокированы.</li><li>При отсутствии полевого игрока основы вступает присутствующий запасной, по приоритету 1 → 2. Вратарь без замены.</li><li>Капитан получает ×2, если присутствовал. Если нет — ×2 получает присутствующий вице-капитан.</li></ul><h2>Очки за игру</h2><table class="league">'+scoring.map(s=>'<tr><td>'+s[0]+'</td><td>'+s[1]+'</td></tr>').join('')+'</table><p class="muted">Штраф за пропущенные голы применяется к каждому участвовавшему футболисту, включая вратаря. Для капитана он тоже удваивается.</p></section>';
 }
 function render(){
  if(!data)return;
+ let adminNav=document.querySelector('.nav button[data-tab="admin"]');
+ if(data.user?.is_admin){
+  if(!adminNav){adminNav=document.createElement('button');adminNav.dataset.tab='admin';adminNav.textContent='Админка';document.querySelector('.nav').appendChild(adminNav);}
+ }else if(adminNav){adminNav.remove();if(tab==='admin')tab='team';}
  ensureDisplaySlots();
  $('round-badge').textContent=data.round?'Тур №'+data.round.round_number+(data.locked?' · закрыт':' · открыт'):'Тур не создан';
  $('login-btn').textContent=data.user?data.user.username+' · Выход':'Войти';
@@ -152,7 +158,7 @@ function render(){
  $('transfers').textContent=(2-data.transfers)+' / 2';
  $('deadline-short').textContent=data.round?new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Riga',day:'numeric',month:'short'}).format(new Date(data.round.deadline_at)):'—';
  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
- $('content').innerHTML=tab==='team'?teamHtml():tab==='market'?marketHtml():tab==='league'?leagueHtml():rulesHtml();
+ $('content').innerHTML=tab==='team'?teamHtml():tab==='market'?marketHtml():tab==='league'?leagueHtml():tab==='admin'?sfHtml():rulesHtml();
 }
 function openLogin(){
  $('modal').hidden=false;
@@ -184,7 +190,7 @@ async function openManager(managerID){
 async function logout(){try{await api('logout');await refresh();flash('Ты вышел из аккаунта.');}catch(e){flash(e.message,true);}}
 document.addEventListener('click',event=>{
  const button=event.target.closest('button');if(!button)return;
- if(button.dataset.tab){tab=button.dataset.tab;render();return;}
+ if(button.dataset.tab){tab=button.dataset.tab;render();if(tab==='admin'&&!sfAdmin.ready&&!sfAdmin.loading)sfLoad();return;}
  if(button.id==='login-btn'){if(data?.user)logout();else openLogin();return;}
  const id=Number(button.dataset.id),action=button.dataset.action;
  if(action==='login')openLogin();else if(action==='close'){$('modal').hidden=true;$('modal').innerHTML='';}
