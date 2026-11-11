@@ -92,7 +92,10 @@ document.addEventListener('click',event=>{
  const button=event.target.closest('button[data-sfm]');if(!button)return;
  const action=button.dataset.sfm;
  if(action==='results'){sfAdminPane='results';render();if(!sfAdmin.ready&&!sfAdmin.loading)sfLoad();}
- if(action==='market'){sfAdminPane='market';render();if(!sfMarket.loaded&&!sfMarket.loading)sfMarketLoad();}
+ if(action==='market'){
+  if(sfAdmin.dirty&&!window.confirm('Есть несохранённая статистика тура. Перейти к рынку без сохранения?'))return;
+  sfAdminPane='market';render();if(!sfMarket.loaded&&!sfMarket.loading)sfMarketLoad();
+ }
  if(action==='reload')sfMarketLoad();
  if(action==='update')sfChangePrice(button.dataset.id);
 });
