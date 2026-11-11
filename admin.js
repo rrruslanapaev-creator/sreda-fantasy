@@ -34,7 +34,7 @@ async function sfLoad(roundId){
  }catch(err){sfAdmin.error=err.message;}
  finally{sfAdmin.loading=false;render();}
 }
-function sfHtml(){
+function sfResultsHtml(){
  if(!data?.user?.is_admin)return '<section class="panel">Нет доступа к админке.</section>';
  if(sfAdmin.loading)return '<section class="panel"><h2>Результаты тура</h2><p>Загружаем статистику…</p></section>';
  if(!sfAdmin.ready)return '<section class="panel"><h2>Результаты тура</h2><p class="subtle">'+
