@@ -2,6 +2,7 @@
 const {createClient}=require('@supabase/supabase-js');
 const {createHash,randomBytes,scryptSync,timingSafeEqual}=require('node:crypto');
 const scoring=require('./results');
+const market=require('./market');
 
 const SESSION_COOKIE='sf_session';
 const sha=x=>createHash('sha256').update(x).digest('hex');
@@ -74,7 +75,7 @@ async function state(client,user){
   let roster=[],transfers=0;
   if(user&&round){
     const [entries,count]=await Promise.all([
-      client.from('roster_entries').select('player_id,slot,is_captain,is_vice_captain').eq('manager_id',user.id).eq('round_id',round.id),
+      client.from('roster_entries').select('player_id,slot,is_captain,is_vice_captain,purchase_price').eq('manager_id',user.id).eq('round_id',round.id),
       client.from('transfers').select('id',{head:true,count:'exact'}).eq('manager_id',user.id).eq('round_id',round.id)
     ]);
     if(entries.error||count.error)throw entries.error||count.error;
@@ -92,6 +93,10 @@ module.exports=async function handler(req,res){
   try{
     const client=db(),user=await currentUser(client,req);
     if(req.method==='GET'){
+      if(req.query.action==='adminMarket'){
+        if(!user?.is_admin)return send(res,403,{error:'Нет прав администратора'});
+        return send(res,200,await market.marketPlayers(client));
+      }
       if(req.query.action==='adminResults'){
         if(!user?.is_admin)return send(res,403,{error:'Нет прав администратора'});
         return send(res,200,await scoring.adminResults(client,req.query.round));
@@ -149,6 +154,13 @@ module.exports=async function handler(req,res){
       return send(res,200,{ok:true});
     }
     if(!user)return send(res,401,{error:'Сначала войди по имени и PIN.'});
+    if(body.action==='adminAddPlayer'||body.action==='adminUpdatePrice'){
+      if(!user.is_admin)return send(res,403,{error:'Нет прав администратора'});
+      const result=body.action==='adminAddPlayer'
+        ?await market.addPlayer(client,user,body)
+        :await market.updatePrice(client,user,body);
+      return send(res,200,result);
+    }
     if(body.action==='adminSaveResults'||body.action==='adminPublishResults'){
       if(!user.is_admin)return send(res,403,{error:'Нет прав администратора'});
       const result=body.action==='adminSaveResults'
