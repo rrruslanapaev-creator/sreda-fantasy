@@ -5,7 +5,7 @@ const cash=n=>Number(n||0).toFixed(1);
 let data=null, draft=[], tab='team', search='', filter='all', saving=false;
 const byId=id=>data?.players?.find(p=>Number(p.id)===Number(id));
 const pos=p=>p?.position==='Вратарь'?'Вратарь':'Полевой';
-const used=()=>draft.reduce((a,e)=>a+Number(byId(e.player_id)?.price||0),0);
+const used=()=>draft.reduce((a,e)=>a+Number(e.purchase_price??byId(e.player_id)?.price??0),0);
 const locked=()=>!data||data.locked;
 function flash(message,isError=false){const el=$('notice');el.innerHTML='<div class="message'+(isError?' error':'')+'">'+esc(message)+'</div>';window.scrollTo({top:0,behavior:'smooth'});}
 async function api(action,payload){
@@ -37,7 +37,7 @@ function assignFlags(){
 function addPlayer(id){
  const p=byId(id);if(!p||!roomFor(p))return;
  const slot=p.position==='Вратарь'?'goalkeeper':draft.filter(e=>e.slot==='starter').length<5?'starter':draft.some(e=>e.slot==='bench1')?'bench2':'bench1';
- draft.push({player_id:id,slot,is_captain:false,is_vice_captain:false});assignFlags();render();
+ draft.push({player_id:id,slot,is_captain:false,is_vice_captain:false,purchase_price:Number(p.price)});assignFlags();render();
 }
 function removePlayer(id){
  if(locked())return;
@@ -94,7 +94,7 @@ function teamHtml(){
  if(!data?.user)return '<section class="panel"><h2>Собери свою команду</h2><p class="subtle">Войди по имени и PIN или зарегистрируй нового менеджера. Состав будет храниться в общей базе.</p><button class="primary" data-action="login">Войти / создать менеджера</button></section>';
  const rows=draft.map(e=>{const p=byId(e.player_id);if(!p)return '';
   const starter=e.slot==='goalkeeper'||e.slot==='starter';
-  return '<div class="entry"><div class="entry-info"><strong>'+esc(p.name)+'</strong><small>'+esc(pos(p))+' · '+(e.slot==='goalkeeper'?'Вратарь':e.slot==='starter'?'Основа':e.slot==='bench1'?'Запас 1':'Запас 2')+' · '+cash(p.price)+'</small></div>'+
+  return '<div class="entry"><div class="entry-info"><strong>'+esc(p.name)+'</strong><small>'+esc(pos(p))+' · '+(e.slot==='goalkeeper'?'Вратарь':e.slot==='starter'?'Основа':e.slot==='bench1'?'Запас 1':'Запас 2')+' · '+cash(e.purchase_price??p.price)+'</small></div>'+
    '<div class="entry-actions">'+(starter?'<button class="small-btn '+(e.is_captain?'marked':'')+'" data-action="cap" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>К</button><button class="small-btn '+(e.is_vice_captain?'marked':'')+'" data-action="vice" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>ВК</button>':'')+
    (p.position!=='Вратарь'?'<button class="small-btn" data-action="move" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>'+(starter?'В запас':'В основу')+'</button>':'')+
    '<button class="small-btn" data-action="remove" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>×</button></div></div>';
@@ -118,7 +118,7 @@ function chip(slot,label){
  const e=draft.find(x=>x.displaySlot===slot);
  if(!e)return '<div class="chip placeholder">'+esc(label||'Пусто')+'</div>';
  const p=byId(e.player_id);return '<div class="chip">'+esc(p?.name||'?')+
-  '<small>'+(e.is_captain?'Капитан · ':e.is_vice_captain?'Вице · ':'')+cash(p?.price)+'</small></div>';
+  '<small>'+(e.is_captain?'Капитан · ':e.is_vice_captain?'Вице · ':'')+cash(e.purchase_price??p?.price)+'</small></div>';
 }
 function marketHtml(){
  const filtered=(data?.players||[]).filter(p=>p.name.toLowerCase().includes(search.toLowerCase())&&(filter==='all'||(filter==='gk')===(p.position==='Вратарь')));
@@ -143,7 +143,7 @@ function leagueHtml(){
 }
 function rulesHtml(){
  const scoring=[['Участие','+1'],['Гол полевого','+5'],['Гол вратаря','+10'],['Голевая передача','+3'],['Сухой 10-минутный матч полевого','+1'],['Сухой 10-минутный матч вратаря','+3'],['Отбитый пенальти','+5'],['Незабитый пенальти','−2'],['Автогол','−2'],['Чемпион вечера','+2'],['Каждые 2 пропущенных гола команды за весь вечер','−1 каждому футболисту']];
- return '<section class="panel rules"><h2>Правила Sreda Fantasy</h2><ul><li>Бюджет — <strong>50.0</strong>. В составе 1 вратарь, 5 полевых в основе и 2 полевых в запасе.</li><li>На каждый тур доступно <strong>2 трансфера</strong>, они не переносятся.</li><li>Дедлайн — <strong>среда, 20:30 Europe/Riga</strong>. После него изменения заблокированы.</li><li>При отсутствии полевого игрока основы вступает присутствующий запасной, по приоритету 1 → 2. Вратарь без замены.</li><li>Капитан получает ×2, если присутствовал. Если нет — ×2 получает присутствующий вице-капитан.</li></ul><h2>Очки за игру</h2><table class="league">'+scoring.map(s=>'<tr><td>'+s[0]+'</td><td>'+s[1]+'</td></tr>').join('')+'</table><p class="muted">Штраф за пропущенные голы применяется к каждому участвовавшему футболисту, включая вратаря. Для капитана он тоже удваивается.</p></section>';
+ return '<section class="panel rules"><h2>Правила Sreda Fantasy</h2><ul><li>Бюджет — <strong>50.0</strong>. В составе 1 вратарь, 5 полевых в основе и 2 полевых в запасе.</li><li>На каждый тур доступно <strong>2 трансфера</strong>, они не переносятся. Стоимость приобретённого игрока сохраняется для менеджера при изменении рыночной цены. Новые покупки идут по текущей цене рынка.</li><li>Дедлайн — <strong>среда, 20:30 Europe/Riga</strong>. После него изменения заблокированы.</li><li>При отсутствии полевого игрока основы вступает присутствующий запасной, по приоритету 1 → 2. Вратарь без замены.</li><li>Капитан получает ×2, если присутствовал. Если нет — ×2 получает присутствующий вице-капитан.</li></ul><h2>Очки за игру</h2><table class="league">'+scoring.map(s=>'<tr><td>'+s[0]+'</td><td>'+s[1]+'</td></tr>').join('')+'</table><p class="muted">Штраф за пропущенные голы применяется к каждому участвовавшему футболисту, включая вратаря. Для капитана он тоже удваивается.</p></section>';
 }
 function render(){
  if(!data)return;

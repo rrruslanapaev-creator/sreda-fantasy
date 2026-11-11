@@ -11,6 +11,6 @@
   },
   "scripts": {
     "test": "node --test",
-    "check": "node --check app.js && node --check admin.js && node --check api/handler.js && node --check api/results.js"
+    "check": "node --check app.js && node --check admin.js && node --check admin-market.js && node --check api/handler.js && node --check api/results.js && node --check api/market.js"
   }
 }
