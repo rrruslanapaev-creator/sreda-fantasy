@@ -59,6 +59,8 @@ async function sfAddFootballer(event){
  sfMarket.busy=true;
  try{
   await api('adminAddPlayer',{name,position,price});
+  // Results editor must include the newly added footballer before its next save.
+  sfAdmin.ready=false;
   sfMarket.loaded=false;sfMarket.busy=false;
   await sfMarketLoad();
   await refresh();
