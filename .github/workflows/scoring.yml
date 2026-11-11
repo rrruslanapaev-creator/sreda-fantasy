@@ -27,11 +27,7 @@ jobs:
       - run: npm run check
       - run: npm test
       - name: SQL scoring regression
-        env:
-          PGPASSWORD: postgres
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client
-          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f tests/sql_schema_fixture.sql
-          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f supabase/003_results_scoring.sql
-          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f tests/sql_scoring_regression.sql
+          docker exec -i "\${{ job.services.postgres.id }}" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql_schema_fixture.sql
+          docker exec -i "\${{ job.services.postgres.id }}" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/003_results_scoring.sql
+          docker exec -i "\${{ job.services.postgres.id }}" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql_scoring_regression.sql
