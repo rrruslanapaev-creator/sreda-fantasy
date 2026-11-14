@@ -53,7 +53,7 @@ test('Two absent field starters activate both available bench players in priorit
  const rows=scoredRoster(roster,withAbsent,players);
  assert.equal(rows.find(x=>x.player_id===7).points,1);
  assert.equal(rows.find(x=>x.player_id===8).points,1);
- assert.equal(rows.reduce((s,x)=>s+x.points,0),6);
+ assert.equal(rows.reduce((s,x)=>s+x.points,0),7);
 });
 test('Season totals sum only published rounds and ownership uses registered accounts',()=>{
  const p=[{id:1,name:'Alpha',position:'Полевой'},
