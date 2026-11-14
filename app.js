@@ -129,7 +129,7 @@ function teamHtml(){
  const rows=draft.map(e=>{const p=byId(e.player_id);if(!p)return '';
   const starter=e.slot==='goalkeeper'||e.slot==='starter';
   return '<div class="entry"><div class="entry-info"><strong>'+esc(p.name)+'</strong><small>'+esc(pos(p))+' · '+slotTitle(e)+' · '+cash(p.price)+'</small></div>'+
-   '<div class="entry-actions">'+scoreBadge(latestEntry(p.id))+'+(starter?'<button class="small-btn '+(e.is_captain?'marked':'')+'" data-action="cap" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>К</button><button class="small-btn '+(e.is_vice_captain?'marked':'')+'" data-action="vice" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>ВК</button>':'')+
+   '<div class="entry-actions">'+scoreBadge(latestEntry(p.id))+(starter?'<button class="small-btn '+(e.is_captain?'marked':'')+'" data-action="cap" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>К</button><button class="small-btn '+(e.is_vice_captain?'marked':'')+'" data-action="vice" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>ВК</button>':'')+
    (p.position!=='Вратарь'?'<button class="small-btn" data-action="move" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>'+(starter?'В запас':'В основу')+'</button>':'')+
    '<button class="small-btn" data-action="remove" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>×</button></div></div>';
  }).join('');
