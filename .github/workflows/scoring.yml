@@ -31,3 +31,5 @@ jobs:
           docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql_schema_fixture.sql
           docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/003_results_scoring.sql
           docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql_scoring_regression.sql
+          docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/005_unlimited_round_transfers.sql
+          docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql_unlimited_transfers_regression.sql
