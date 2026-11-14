@@ -13,3 +13,27 @@
 .sf-preview strong{font-size:25px;color:#a1f4be}
 .sf-score-list{max-height:680px;overflow:auto}.sf-score-row{width:100%;display:flex;justify-content:space-between;gap:12px;text-align:left;background:transparent;border:0;border-bottom:1px solid #294437;color:#ecfff2;padding:10px 3px}.sf-score-row:hover{background:#234633}.sf-score-row strong{color:#9df1b9}
 @media(max-width:500px){.sf-stats-grid{grid-template-columns:1fr}}
+
+/* Team scoring and ownership standings */
+.tour-summary{margin-bottom:17px;background:linear-gradient(120deg,#183627,#14251e)}
+.tour-summary-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.tour-summary-header h2{margin-bottom:3px}
+.tour-summary-header p{margin:0}
+.tour-total{font-size:32px;line-height:1.1;color:#a5f3bf;white-space:nowrap;font-variant-numeric:tabular-nums}
+.tour-total span{font-size:14px;color:#c8e7d2;font-weight:550}
+.score-badge{display:inline-flex;align-items:flex-end;justify-content:center;flex-direction:column;min-width:46px;padding:6px 9px;border-radius:8px;border:1px solid #3e7654;background:#204431;color:#aeffc7;font-weight:800;font-size:16px;line-height:1.2;font-variant-numeric:tabular-nums;white-space:nowrap}
+.score-badge small{font-size:10px;font-weight:500;color:#bedccb;margin-top:3px;white-space:normal}
+.chip-score{display:block;color:#0c3521;background:#abffd0;border-radius:30px;font-size:12px;font-weight:900;margin-top:5px;padding:2px 8px;font-variant-numeric:tabular-nums}
+.tour-history-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 20px;margin-top:12px}
+.tour-history-item{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2d4a39;padding:9px 0;gap:10px}
+.tour-history-item strong,.tour-history-item small{display:block}
+.tour-history-item small{color:#a7c8b2;font-size:12px}
+.table-scroll{overflow-x:auto}
+.player-points-table{min-width:440px}
+.player-points-table .numeric{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.player-points-table .numeric small{font-size:11px;color:#8fae9a}
+.player-points-table tr[hidden]{display:none}
+.modal-total{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#21503a;border-radius:10px;padding:12px 14px;margin:12px 0}
+.modal-total strong{font-size:28px;color:#a5f3bf}
+.modal-roster-scroll{max-height:60vh;overflow-y:auto}
+@media(max-width:600px){.tour-history-list{grid-template-columns:1fr}.dialog{padding:16px}.entry-actions{gap:4px}.entry-actions .score-badge{min-width:40px;padding:4px 6px}}

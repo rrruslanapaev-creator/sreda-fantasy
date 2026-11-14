@@ -2,6 +2,7 @@
 const {createClient}=require('@supabase/supabase-js');
 const {createHash,randomBytes,scryptSync,timingSafeEqual}=require('node:crypto');
 const scoring=require('./results');
+const season=require('./season');
 
 const SESSION_COOKIE='sf_session';
 const sha=x=>createHash('sha256').update(x).digest('hex');
@@ -64,13 +65,14 @@ async function throttle(client,req,scope,limit=8,seconds=900){
 }
 async function state(client,user){
   const [p,r,m,s]=await Promise.all([
-    client.from('players').select('id,name,position,price').eq('active',true).order('price',{ascending:false}),
-    client.from('rounds').select('id,round_number,deadline_at,status').order('round_number',{ascending:false}).limit(1),
+    client.from('players').select('id,name,position,price,active').order('price',{ascending:false}),
+    client.from('rounds').select('id,round_number,deadline_at,status').order('round_number',{ascending:false}),
     client.from('managers').select('id,username').order('created_at'),
-    client.from('manager_round_points').select('manager_id,points')
+    client.from('manager_round_points').select('round_id,manager_id,points')
   ]);
   for(const q of [p,r,m,s])if(q.error)throw q.error;
   const round=r.data?.[0]||null,locked=!round||Date.parse(round.deadline_at)<=Date.now();
+  const seasonData=await season.publishedData(client,r.data||[],p.data||[],(m.data||[]).length,round);
   let roster=[],transfers=0;
   if(user&&round){
     const [entries,count]=await Promise.all([
@@ -81,10 +83,33 @@ async function state(client,user){
     roster=entries.data||[];transfers=count.count||0;
   }
   const leaderboard=(m.data||[]).map(x=>({id:x.id,username:x.username,
-    points:(s.data||[]).filter(v=>v.manager_id===x.id).reduce((sum,v)=>sum+v.points,0)}))
+    points:(s.data||[]).filter(v=>v.manager_id===x.id).reduce((sum,v)=>sum+Number(v.points||0),0)}))
     .sort((a,b)=>b.points-a.points||a.username.localeCompare(b.username,'ru'));
-  const scores=await scoring.publishedScores(client,round,p.data||[]);
-  return {players:p.data||[],round,locked,user,roster,transfers,leaderboard,...scores};
+  let myLastTour=null;
+  if(user&&seasonData.lastRound){
+    const last=seasonData.lastRound;
+    let entries=String(round?.id)===String(last.id)?roster:null;
+    if(!entries){
+      const previous=await client.from('roster_entries')
+        .select('player_id,slot,is_captain,is_vice_captain')
+        .eq('manager_id',user.id).eq('round_id',last.id);
+      if(previous.error)throw previous.error;
+      entries=previous.data||[];
+    }
+    const result=(s.data||[]).find(x=>String(x.round_id)===String(last.id)&&x.manager_id===user.id);
+    myLastTour={
+      round_number:last.round_number,
+      round_id:last.id,
+      points:result?Number(result.points):0,
+      roster:season.scoredRoster(entries,seasonData.lastStats,p.data||[])
+    };
+  }
+  return {
+    players:p.data||[],round,locked,user,roster,transfers,leaderboard,
+    lastRound:seasonData.lastRound,
+    seasonPlayers:seasonData.seasonPlayers,
+    myLastTour
+  };
 }
 module.exports=async function handler(req,res){
   if(req.method!=='GET'&&req.method!=='POST')return send(res,405,{error:'Метод не поддерживается'});
@@ -105,10 +130,26 @@ module.exports=async function handler(req,res){
         if(!r)return send(res,404,{error:'Тур не найден'});
         if(Date.parse(r.deadline_at)>Date.now()&&user?.id!==id)
           return send(res,403,{error:'Чужой состав откроется после дедлайна'});
-        const {data:roster,error:re}=await client.from('roster_entries')
-          .select('player_id,slot,is_captain,is_vice_captain').eq('round_id',roundID).eq('manager_id',id);
-        if(re)throw re;
-        return send(res,200,{roster:roster||[]});
+        const [{data:roster,error:re},{data:publication,error:pe}]=await Promise.all([
+          client.from('roster_entries')
+            .select('player_id,slot,is_captain,is_vice_captain').eq('round_id',roundID).eq('manager_id',id),
+          client.from('round_results_publication').select('round_id').eq('round_id',roundID).maybeSingle()
+        ]);
+        if(re||pe)throw re||pe;
+        if(!publication)return send(res,200,{roster:roster||[],published:false});
+        const [statResult,playerResult,pointResult]=await Promise.all([
+          client.from('player_round_stats')
+            .select('player_id,attended,goals,assists,clean_sheets,penalty_saves,penalty_misses,own_goals,goals_conceded,champion')
+            .eq('round_id',roundID),
+          client.from('players').select('id,position'),
+          client.from('manager_round_points').select('points').eq('round_id',roundID).eq('manager_id',id).maybeSingle()
+        ]);
+        for(const query of [statResult,playerResult,pointResult])if(query.error)throw query.error;
+        return send(res,200,{
+          roster:season.scoredRoster(roster||[],statResult.data||[],playerResult.data||[]),
+          points:pointResult.data?Number(pointResult.data.points):0,
+          published:true
+        });
       }
       return send(res,200,await state(client,user));
     }
