@@ -5,8 +5,35 @@ const cash=n=>Number(n||0).toFixed(1);
 let data=null, draft=[], tab='team', search='', filter='all', saving=false;
 const byId=id=>data?.players?.find(p=>Number(p.id)===Number(id));
 const pos=p=>p?.position==='Вратарь'?'Вратарь':'Полевой';
-const used=()=>draft.reduce((a,e)=>a+Number(byId(e.player_id)?.price||0),0);
+// Both saved and edited squads are valued at CURRENT market prices.
+const budgetLimit=50;
+const rosterCost=entries=>(entries||[]).reduce((sum,e)=>sum+Number(byId(e.player_id)?.price||0),0);
+const used=()=>rosterCost(draft);
 const locked=()=>!data||data.locked;
+function budgetAlertHtml(){
+ if(!data?.user)return '';
+ const savedEntries=data.roster||[];
+ const savedCost=rosterCost(savedEntries);
+ const editedCost=used();
+ const savedOver=savedEntries.length>0&&savedCost>budgetLimit+0.001;
+ const editedOver=draft.length>0&&editedCost>budgetLimit+0.001;
+ if(!savedOver&&!editedOver)return '';
+ let text='';
+ if(savedOver){
+  text+='Стоимость сохранённой команды: <strong>'+cash(savedCost)+'</strong> (превышение <strong>'+
+   cash(savedCost-budgetLimit)+'</strong>). ';
+ }
+ if(editedOver){
+  text+='Текущий выбранный состав стоит <strong>'+cash(editedCost)+'</strong>. ';
+ }
+ const hint=locked()?
+  'Дедлайн уже прошёл, поэтому изменить состав сейчас нельзя.':
+  editedOver?
+   'Замени одного или нескольких футболистов, чтобы уложиться в 50.0, затем нажми «Сохранить состав».':
+   'В твоём обновлённом составе бюджет соблюдён. Нажми «Сохранить состав», чтобы зафиксировать изменения.';
+ return '<section class="budget-alert" role="alert"><strong>Состав не вписывается в бюджет 50.0</strong>'+
+  '<p>'+text+hint+'</p></section>';
+}
 const scored=n=>(Number(n)>0?'+':'')+String(Number(n)||0);
 const slotTitle=e=>e.slot==='goalkeeper'?'Вратарь':e.slot==='starter'?'Основа':e.slot==='bench1'?'Запас 1':'Запас 2';
 const lastRoundIsCurrent=()=>Boolean(data?.myLastTour&&String(data?.round?.id)===String(data.myLastTour.round_id));
@@ -124,6 +151,7 @@ async function saveTeam(){
  if(locked())return flash('Дедлайн уже прошёл.',true);
  if(draft.length!==8)return flash('Сначала набери 8 игроков.',true);
  if(!draft.some(x=>x.is_captain)||!draft.some(x=>x.is_vice_captain))return flash('Выбери капитана и вице-капитана.',true);
+ if(used()>budgetLimit+0.001)return flash('Бюджет превышен на '+cash(used()-budgetLimit)+'. Замени футболистов, чтобы уложиться в 50.0.',true);
  if(saving)return;saving=true;
  try{const free=Boolean(data?.round?.unlimited_transfers);const r=await api('save',{roster:draft});await refresh();flash(free?'Новый состав сохранён. В этом туре количество трансферов не ограничено.':'Состав сохранён на сервере. Использовано трансферов: '+r.transfers+' из 2.');}
  catch(e){flash(e.message,true);}finally{saving=false;}
@@ -137,7 +165,7 @@ function teamHtml(){
    (p.position!=='Вратарь'?'<button class="small-btn" data-action="move" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>'+(starter?'В запас':'В основу')+'</button>':'')+
    '<button class="small-btn" data-action="remove" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>×</button></div></div>';
  }).join('');
- return myLastTourHtml()+(data.round?.unlimited_transfers&&!locked()?'<div class="message">Тур №'+data.round.round_number+': <strong>неограниченные бесплатные трансферы</strong> до 18 ноября, 20:30 по Риге. Можно полностью пересобрать восьмёрку, менять капитана и запасных. Очки прошлого тура сохраняются выше.</div>':'')+'<div class="columns"><section class="panel"><h2>Твой состав · тур №'+data.round?.round_number+'</h2><p class="muted">На поле — 5 полевых по схеме 1–2–2 и вратарь</p><div class="pitch"><div class="formation">'+
+ return budgetAlertHtml()+myLastTourHtml()+(data.round?.unlimited_transfers&&!locked()?'<div class="message">Тур №'+data.round.round_number+': <strong>неограниченные бесплатные трансферы</strong> до 18 ноября, 20:30 по Риге. Можно полностью пересобрать восьмёрку, менять капитана и запасных. Очки прошлого тура сохраняются выше.</div>':'')+'<div class="columns"><section class="panel"><h2>Твой состав · тур №'+data.round?.round_number+'</h2><p class="muted">На поле — 5 полевых по схеме 1–2–2 и вратарь</p><div class="pitch"><div class="formation">'+
   '<div class="slot front">'+chip('starter:0','Нападение')+'</div>'+
   ['mid-left','mid-right','back-left','back-right'].map((c,i)=>'<div class="slot '+c+'">'+chip('starter:'+(i+1),'Основа')+'</div>').join('')+
   '<div class="slot keeper">'+chip('goalkeeper','Вратарь')+'</div></div></div>'+
@@ -206,7 +234,9 @@ function render(){
  ensureDisplaySlots();
  $('round-badge').textContent=data.round?'Тур №'+data.round.round_number+(data.locked?' · закрыт':' · открыт'):'Тур не создан';
  $('login-btn').textContent=data.user?data.user.username+' · Выход':'Войти';
- $('budget').textContent=cash(50-used());$('count').textContent=draft.length+' / 8';
+ $('budget').textContent=cash(budgetLimit-used());
+ $('budget').closest('.metric').classList.toggle('budget-over',used()>budgetLimit+0.001);
+ $('count').textContent=draft.length+' / 8';
  $('transfers').textContent=data.round?.unlimited_transfers?'∞':(2-data.transfers)+' / 2';
  $('transfers').nextElementSibling.textContent=data.round?.unlimited_transfers?'бесплатно до дедлайна':'на текущий тур';
  $('deadline-short').textContent=data.round?new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Riga',day:'numeric',month:'short'}).format(new Date(data.round.deadline_at)):'—';
