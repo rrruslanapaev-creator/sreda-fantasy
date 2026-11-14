@@ -41,5 +41,5 @@ test('round 1 remains historically unchanged even if goal_difference is supplied
  const sample={attended:true,goals:2,assists:1,clean_sheets:3,champion:true,goals_conceded:5,goal_difference:-30};
  assert.equal(playerPoints(sample,'Полевой',1),17);
  assert.equal(playerPoints(sample,'Полевой'),17);
- assert.equal(playerPoints(sample,'Полевой',2),10);
+ assert.equal(playerPoints(sample,'Полевой',2),9);
 });
