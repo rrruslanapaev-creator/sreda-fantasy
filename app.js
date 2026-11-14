@@ -11,11 +11,15 @@ const scored=n=>(Number(n)>0?'+':'')+String(Number(n)||0);
 const slotTitle=e=>e.slot==='goalkeeper'?'Вратарь':e.slot==='starter'?'Основа':e.slot==='bench1'?'Запас 1':'Запас 2';
 const lastRoundIsCurrent=()=>Boolean(data?.myLastTour&&String(data?.round?.id)===String(data.myLastTour.round_id));
 const latestEntry=id=>lastRoundIsCurrent()?data.myLastTour.roster.find(e=>Number(e.player_id)===Number(id)):null;
+const unusedBench=e=>Boolean(e&&e.attended&&!e.counted&&(e.slot==='bench1'||e.slot==='bench2'));
+const displayedPlayerPoints=e=>unusedBench(e)?Number(e.raw_points??0):Number(e.points??0);
 function scoreBadge(e){
  if(!e)return '';
- const detail=!e.attended?' · не играл':!e.counted?' · не вышел':e.substituted?' · замена':e.multiplier===2?' · ×2':'';
- return '<span class="score-badge" title="Очки, принесённые фэнтези-команде">'+scored(e.points)+
-  '<small>'+detail.trim().replace(/^·\s*/,'')+'</small></span>';
+ const unused=unusedBench(e);
+ const detail=!e.attended?'не играл':unused?'не вышел · не в зачёт':e.substituted?'замена':e.multiplier===2?'×2':'';
+ const title=unused?'Личные очки футболиста: не засчитаны в результат команды':'Очки, принесённые фэнтези-команде';
+ return '<span class="score-badge'+(unused?' score-badge-unused':'')+'" title="'+title+'">'+scored(displayedPlayerPoints(e))+
+  '<small>'+detail+'</small></span>';
 }
 function myLastTourHtml(){
  const tour=data?.myLastTour;
@@ -30,7 +34,7 @@ function myLastTourHtml(){
   '<strong class="tour-total">'+scored(tour.points)+' <span>очков</span></strong></div>';
  if(!tour.roster.length)html+='<p class="muted">На этот тур состав не был сохранён.</p>';
  if(!same&&tour.roster.length){
-  html+='<p class="muted">Ниже — состав именно последнего завершённого тура, не текущая заявка.</p>'+
+  html+='<p class="muted">Ниже — состав последнего завершённого тура. У запасных с пометкой «не вышел» видны личные очки, которые не засчитаны команде.</p>'+
    '<div class="tour-history-list">'+tour.roster.map(e=>{
      const p=byId(e.player_id);
      return '<div class="tour-history-item"><div><strong>'+esc(p?.name||'Футболист №'+e.player_id)+'</strong>'+
@@ -38,7 +42,7 @@ function myLastTourHtml(){
        scoreBadge(e)+'</div>';
     }).join('')+'</div>';
  }
- if(same)html+='<p class="muted">Очки каждого футболиста показаны на поле и рядом с его именем в составе ниже. Для неиспользованного запаса — 0.</p>';
+ if(same)html+='<p class="muted">Очки каждого футболиста показаны на поле и рядом с его именем в составе ниже. У запасных, не вышедших на замену, указаны их личные очки — в результат команды они не включаются.</p>';
  return html+'</section>';
 }
 function flash(message,isError=false){const el=$('notice');el.innerHTML='<div class="message'+(isError?' error':'')+'">'+esc(message)+'</div>';window.scrollTo({top:0,behavior:'smooth'});}
@@ -153,7 +157,7 @@ function chip(slot,label){
  if(!e)return '<div class="chip placeholder">'+esc(label||'Пусто')+'</div>';
  const p=byId(e.player_id);return '<div class="chip">'+esc(p?.name||'?')+
   '<small>'+(e.is_captain?'Капитан · ':e.is_vice_captain?'Вице · ':'')+cash(p?.price)+'</small>'+
-  (latestEntry(e.player_id)?'<span class="chip-score">'+scored(latestEntry(e.player_id).points)+'</span>':'')+'</div>';
+  (latestEntry(e.player_id)?'<span class="chip-score'+(unusedBench(latestEntry(e.player_id))?' chip-score-unused':'')+'">'+scored(displayedPlayerPoints(latestEntry(e.player_id)))+(unusedBench(latestEntry(e.player_id))?' · не вышел':'')+'</span>':'')+'</div>';
 }
 function marketHtml(){
  const filtered=(data?.players||[]).filter(p=>p.active!==false&&p.name.toLowerCase().includes(search.toLowerCase())&&(filter==='all'||(filter==='gk')===(p.position==='Вратарь')));
