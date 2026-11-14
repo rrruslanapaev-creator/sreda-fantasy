@@ -84,3 +84,24 @@ test('Empty league produces 0% ownership rather than NaN',()=>{
  assert.equal(rows[0].ownership_percent,0);
  assert.equal(rows[0].season_points,0);
 });
+
+test('Season totals apply legacy and new penalties per published round',()=>{
+ const p=[{id:2,name:'Scorer',position:'Полевой'}];
+ const stats=[
+  {round_id:1,player_id:2,attended:true,goals_conceded:6,goal_difference:0},
+  {round_id:2,player_id:2,attended:true,goals_conceded:6,goal_difference:-3},
+  {round_id:3,player_id:2,attended:true,goals_conceded:0,goal_difference:-30}
+ ];
+ const rounds=new Map([['1',1],['2',2],['3',3]]);
+ const season=buildSeason(p,stats,[1,2],[],1,rounds);
+ assert.equal(season[0].season_points,-2); // round 1: -2, round 2: 0
+});
+test('Historical scored roster uses the scoring rule of its own round',()=>{
+ const differences=stats.map(stat=>({...stat,goal_difference:-6,goals_conceded:0}));
+ const previous=scoredRoster(roster,differences,players,1);
+ const upcoming=scoredRoster(roster,differences,players,2);
+ assert.equal(previous.find(e=>e.player_id===2).points,2);
+ assert.equal(upcoming.find(e=>e.player_id===2).points,-2);
+ assert.equal(upcoming.find(e=>e.player_id===7).raw_points,-1);
+ assert.equal(upcoming.find(e=>e.player_id===7).points,0);
+});
