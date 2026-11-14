@@ -101,7 +101,7 @@ async function state(client,user){
       round_number:last.round_number,
       round_id:last.id,
       points:result?Number(result.points):0,
-      roster:season.scoredRoster(entries,seasonData.lastStats,p.data||[])
+      roster:season.scoredRoster(entries,seasonData.lastStats,p.data||[],last.round_number)
     };
   }
   return {
@@ -125,7 +125,7 @@ module.exports=async function handler(req,res){
         const id=String(req.query.manager||''),roundID=Number(req.query.round);
         if(!/^[a-f0-9-]{36}$/i.test(id)||!Number.isSafeInteger(roundID)||roundID<1)
           return send(res,400,{error:'Неверные параметры'});
-        const {data:r,error}=await client.from('rounds').select('deadline_at').eq('id',roundID).maybeSingle();
+        const {data:r,error}=await client.from('rounds').select('deadline_at,round_number').eq('id',roundID).maybeSingle();
         if(error)throw error;
         if(!r)return send(res,404,{error:'Тур не найден'});
         if(Date.parse(r.deadline_at)>Date.now()&&user?.id!==id)
@@ -139,14 +139,14 @@ module.exports=async function handler(req,res){
         if(!publication)return send(res,200,{roster:roster||[],published:false});
         const [statResult,playerResult,pointResult]=await Promise.all([
           client.from('player_round_stats')
-            .select('player_id,attended,goals,assists,clean_sheets,penalty_saves,penalty_misses,own_goals,goals_conceded,champion')
+            .select('player_id,attended,goals,assists,clean_sheets,penalty_saves,penalty_misses,own_goals,goals_conceded,goal_difference,champion')
             .eq('round_id',roundID),
           client.from('players').select('id,position'),
           client.from('manager_round_points').select('points').eq('round_id',roundID).eq('manager_id',id).maybeSingle()
         ]);
         for(const query of [statResult,playerResult,pointResult])if(query.error)throw query.error;
         return send(res,200,{
-          roster:season.scoredRoster(roster||[],statResult.data||[],playerResult.data||[]),
+          roster:season.scoredRoster(roster||[],statResult.data||[],playerResult.data||[],r.round_number),
           points:pointResult.data?Number(pointResult.data.points):0,
           published:true
         });
