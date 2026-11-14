@@ -1,11 +1,11 @@
 // Server-side results API. Access checked again inside SQL functions.
-const FIELDS=['goals','assists','clean_sheets','penalty_saves','penalty_misses','own_goals','goals_conceded'];
-function playerPoints(stat,position){
+const FIELDS=['goals','assists','clean_sheets','penalty_saves','penalty_misses','own_goals','goals_conceded','goal_difference'];
+function playerPoints(stat,position,roundNumber=1){
   if(!stat?.attended)return 0;
   const n=k=>Number(stat[k]||0);
   return 1+n('goals')*(position==='Вратарь'?10:5)+n('assists')*3+
     n('clean_sheets')*(position==='Вратарь'?3:1)+n('penalty_saves')*5-
-    n('penalty_misses')*2-n('own_goals')*2-Math.floor(n('goals_conceded')/2)+
+    n('penalty_misses')*2-n('own_goals')*2-(Number(roundNumber)>=2?Math.floor(Math.max(0,-n('goal_difference'))/3):Math.floor(n('goals_conceded')/2))+
     (stat.champion?2:0);
 }
 function roundId(value){
@@ -56,12 +56,12 @@ async function publishedScores(client,round,players){
   }
   if(!pub)return {published:false,playerScores:[]};
   const {data:stats,error:se}=await client.from('player_round_stats')
-    .select('player_id,attended,goals,assists,clean_sheets,penalty_saves,penalty_misses,own_goals,goals_conceded,champion')
+    .select('player_id,attended,goals,assists,clean_sheets,penalty_saves,penalty_misses,own_goals,goals_conceded,goal_difference,champion')
     .eq('round_id',round.id);
   if(se)throw se;
   const byId=new Map(players.map(p=>[String(p.id),p]));
   return {published:true,playerScores:(stats||[]).filter(s=>s.attended).map(s=>({
-    player_id:s.player_id,points:playerPoints(s,byId.get(String(s.player_id))?.position)
+    player_id:s.player_id,points:playerPoints(s,byId.get(String(s.player_id))?.position,round.round_number)
   })).sort((a,b)=>b.points-a.points)};
 }
 module.exports={adminResults,saveResults,publishResults,publishedScores,playerPoints,FIELDS};
