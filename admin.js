@@ -2,20 +2,24 @@
 // Admin interface: all edits remain local until saved. Publication is explicit.
 let sfAdmin={loading:false,ready:false,busy:false,error:'',round:null,rounds:[],players:[],stats:[],index:0,dirty:false,published_at:null};
 const sfFields=[
- ['goals','Голы',100],['assists','Голевые передачи',100],['clean_sheets','Сухие 10-минутные матчи',8],
- ['penalty_saves','Отбитые пенальти',100],['penalty_misses','Незабитые пенальти',100],
- ['own_goals','Автоголы',100],['goals_conceded','Пропущено командой за весь вечер',100]
+ ['goals','Голы',0,100],['assists','Голевые передачи',0,100],['clean_sheets','Сухие 10-минутные матчи',0,8],
+ ['penalty_saves','Отбитые пенальти',0,100],['penalty_misses','Незабитые пенальти',0,100],
+ ['own_goals','Автоголы',0,100]
 ];
+const sfVisibleFields=()=>sfFields.concat(Number(sfAdmin.round?.round_number)>=2
+ ?[['goal_difference','Разница мячей команды за вечер (забитые − пропущенные)',-100,100]]
+ :[['goals_conceded','Пропущено командой за весь вечер',0,100]]);
 function sfDefaultStat(playerId){
  return {player_id:Number(playerId),attended:false,goals:0,assists:0,clean_sheets:0,
-  penalty_saves:0,penalty_misses:0,own_goals:0,goals_conceded:0,champion:false};
+  penalty_saves:0,penalty_misses:0,own_goals:0,goals_conceded:0,goal_difference:0,champion:false};
 }
-function sfCalc(stat,position){
+function sfCalc(stat,position,roundNumber=1){
  if(!stat?.attended)return 0;
  const n=key=>Number(stat[key]||0);
  return 1+n('goals')*(position==='Вратарь'?10:5)+n('assists')*3+
   n('clean_sheets')*(position==='Вратарь'?3:1)+n('penalty_saves')*5-
-  n('penalty_misses')*2-n('own_goals')*2-Math.floor(n('goals_conceded')/2)+
+  n('penalty_misses')*2-n('own_goals')*2-
+  (Number(roundNumber)>=2?Math.floor(Math.max(0,-n('goal_difference'))/3):Math.floor(n('goals_conceded')/2))+
   (stat.champion?2:0);
 }
 async function sfLoad(roundId){
@@ -43,9 +47,9 @@ function sfHtml(){
  if(!p||!s)return '<section class="panel">Список футболистов пуст.</section>';
  const attended=sfAdmin.stats.filter(x=>x.attended).length,done=sfAdmin.stats.length;
  const past=Date.now()>=Date.parse(round.deadline_at);
- const score=sfCalc(s,p.position);
- const statsInputs=sfFields.map(([key,label,max])=>
-  '<label class="sf-number"><span>'+esc(label)+'</span><input type="number" class="field" data-sf-field="'+key+'" min="0" max="'+max+'" step="1" inputmode="numeric" value="'+Number(s[key]||0)+'" '+(!s.attended||sfAdmin.busy?'disabled':'')+' /></label>').join('');
+ const score=sfCalc(s,p.position,round.round_number);
+ const statsInputs=sfVisibleFields().map(([key,label,min,max])=>
+  '<label class="sf-number"><span>'+esc(label)+'</span><input type="number" class="field" data-sf-field="'+key+'" min="'+min+'" max="'+max+'" step="1" inputmode="numeric" value="'+Number(s[key]||0)+'" '+(!s.attended||sfAdmin.busy?'disabled':'')+' /></label>').join('');
  const optionHtml=players.map((player,i)=>'<option value="'+i+'" '+(idx===i?'selected':'')+'>'+
   esc(player.name)+(sfAdmin.stats[i].attended?' • играл':'')+'</option>').join('');
  const roundOptions=sfAdmin.rounds.map(r=>'<option value="'+r.id+'" '+(Number(r.id)===Number(round.id)?'selected':'')+
@@ -68,7 +72,9 @@ function sfHtml(){
   (!s.attended||sfAdmin.busy?' disabled':'')+' /> Чемпион вечера (+2)</label>'+
   '<div class="sf-stats-grid">'+statsInputs+'</div>'+
   '<div class="sf-preview"><span>Очки футболиста</span><strong id="sf-preview-points">'+score+'</strong></div>'+
-  '<p class="muted">Штраф: −1 за каждые два гола, пропущенных командой футболиста <strong>суммарно за весь вечер</strong>. Заполни это поле каждому участнику команды. У капитана эти очки также удваиваются.</p>'+
+  '<p class="muted">'+(Number(round.round_number)>=2
+    ?'Начиная с тура №2: введи для каждого участника <strong>разницу мячей его команды за весь вечер</strong> (все забитые минус все пропущенные). Отрицательные значения вводятся со знаком минус. За каждые полные −3 мяча — штраф −1; −1 и −2 без штрафа, положительная разница не даёт бонусов.'
+    :'Тур №1: штраф −1 за каждые два гола, пропущенных командой футболиста за весь вечер. Это правило сохраняется в истории.')+'</p>'+
   '</section><section class="panel"><h2>Сохранение и публикация</h2>'+
   '<p class="subtle">Сначала заполни всех игравших футболистов, затем сохрани статистику. Можно исправить значения и пересчитать повторно.</p>'+
   '<div class="actions"><button class="primary" data-sf="save" '+(!past||sfAdmin.busy?'disabled':'')+'>'+
@@ -76,7 +82,7 @@ function sfHtml(){
   '<button class="outline" data-sf="publish" '+(!past||sfAdmin.busy?'disabled':'')+
   '>Опубликовать очки</button></div>'+
   '<div class="divider"></div><h2>Предварительные очки футболистов</h2>'+
-  '<div class="sf-score-list">'+players.map((player,i)=>({player,i,pts:sfCalc(sfAdmin.stats[i],player.position)}))
+  '<div class="sf-score-list">'+players.map((player,i)=>({player,i,pts:sfCalc(sfAdmin.stats[i],player.position,round.round_number)}))
    .filter(x=>sfAdmin.stats[x.i].attended).sort((a,b)=>b.pts-a.pts)
    .map(x=>'<button class="sf-score-row" data-sf="choose" data-index="'+x.i+'"><span>'+
     esc(x.player.name)+'</span><strong>'+x.pts+'</strong></button>').join('')+
@@ -85,7 +91,7 @@ function sfHtml(){
 }
 function sfRefreshPreview(){
  const el=document.getElementById('sf-preview-points');
- if(el)el.textContent=sfCalc(sfAdmin.stats[sfAdmin.index],sfAdmin.players[sfAdmin.index].position);
+ if(el)el.textContent=sfCalc(sfAdmin.stats[sfAdmin.index],sfAdmin.players[sfAdmin.index].position,sfAdmin.round.round_number);
  const status=document.getElementById('sf-unsaved');if(status)status.textContent='Есть несохранённые изменения.';
 }
 async function sfSave(silent=false){
@@ -136,7 +142,7 @@ document.addEventListener('change',event=>{
   const stat=sfAdmin.stats[sfAdmin.index];if(!stat)return;
   if(target.id==='sf-attended'){
    stat.attended=target.checked;
-   if(!stat.attended){for(const [field] of sfFields)stat[field]=0;stat.champion=false;}
+   if(!stat.attended){for(const [field] of [...sfFields,['goals_conceded'],['goal_difference']])stat[field]=0;stat.champion=false;}
   }else stat.champion=target.checked;
   sfAdmin.dirty=true;render();
  }
@@ -144,9 +150,9 @@ document.addEventListener('change',event=>{
 document.addEventListener('input',event=>{
  const field=event.target.dataset?.sfField;
  if(!field||!sfAdmin.ready||sfAdmin.busy)return;
- const definition=sfFields.find(x=>x[0]===field);if(!definition)return;
+ const definition=sfVisibleFields().find(x=>x[0]===field);if(!definition)return;
  const val=Number(event.target.value);
- if(!Number.isInteger(val)||val<0||val>definition[2]){event.target.setCustomValidity('Введи целое число от 0 до '+definition[2]);return;}
+ if(!Number.isInteger(val)||val<definition[2]||val>definition[3]){event.target.setCustomValidity('Введи целое число от '+definition[2]+' до '+definition[3]);return;}
  event.target.setCustomValidity('');
  sfAdmin.stats[sfAdmin.index][field]=val;
  sfAdmin.dirty=true;sfRefreshPreview();
