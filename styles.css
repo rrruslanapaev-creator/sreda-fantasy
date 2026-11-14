@@ -42,3 +42,10 @@
 .score-badge-unused{background:#26352e;border-color:#66786d;color:#dce6dd}
 .score-badge-unused small{color:#b3c1b5}
 .chip-score-unused{background:#dfeddf;color:#3c4d40;font-size:11px}
+
+/* Budget revaluation warning: saved squads may become invalid after market updates. */
+.budget-alert{border:2px solid #d59467;background:#422d24;color:#ffe9d5;border-radius:16px;padding:17px 20px;margin-bottom:17px}
+.budget-alert>strong{font-size:17px}
+.budget-alert p{margin:7px 0 0;line-height:1.55}
+.metric.budget-over{border-color:#d59467;background:#3c2922}
+.metric.budget-over strong{color:#ffc393}
