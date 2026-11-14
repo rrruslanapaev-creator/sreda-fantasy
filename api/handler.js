@@ -66,7 +66,7 @@ async function throttle(client,req,scope,limit=8,seconds=900){
 async function state(client,user){
   const [p,r,m,s]=await Promise.all([
     client.from('players').select('id,name,position,price,active').order('price',{ascending:false}),
-    client.from('rounds').select('id,round_number,deadline_at,status').order('round_number',{ascending:false}),
+    client.from('rounds').select('id,round_number,deadline_at,status,unlimited_transfers').order('round_number',{ascending:false}),
     client.from('managers').select('id,username').order('created_at'),
     client.from('manager_round_points').select('round_id,manager_id,points')
   ]);
