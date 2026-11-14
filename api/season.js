@@ -18,7 +18,7 @@ function rankRows(rows){
   return rows.slice().sort((a,b)=>b.season_points-a.season_points||
     b.ownership_percent-a.ownership_percent||a.name.localeCompare(b.name,'ru'));
 }
-function buildSeason(players,stats,publishedIds,ownership,managerCount){
+function buildSeason(players,stats,publishedIds,ownership,managerCount,roundNumbers=new Map()){
   const pubIds=new Set(publishedIds.map(String));
   const rosterCount=new Map();
   const seen=new Set();
@@ -35,7 +35,7 @@ function buildSeason(players,stats,publishedIds,ownership,managerCount){
     const pid=String(stat.player_id);
     const player=players.find(p=>String(p.id)===pid);
     if(!player)continue;
-    totals.set(pid,(totals.get(pid)||0)+playerPoints(stat,player.position));
+    totals.set(pid,(totals.get(pid)||0)+playerPoints(stat,player.position,roundNumbers.get(String(stat.round_id))||1));
   }
   return rankRows(players.map(p=>{
     const owners=rosterCount.get(String(p.id))||0;
@@ -45,7 +45,7 @@ function buildSeason(players,stats,publishedIds,ownership,managerCount){
     };
   }));
 }
-function scoredRoster(roster,stats,players){
+function scoredRoster(roster,stats,players,roundNumber=1){
   const playerById=new Map(players.map(p=>[String(p.id),p]));
   const statById=new Map(stats.map(s=>[String(s.player_id),s]));
   const presence=e=>statById.get(String(e.player_id))?.attended===true;
@@ -62,7 +62,7 @@ function scoredRoster(roster,stats,players){
     const id=String(e.player_id);
     const stat=statById.get(id);
     const player=playerById.get(id);
-    const raw=player?playerPoints(stat,player.position):0;
+    const raw=player?playerPoints(stat,player.position,roundNumber):0;
     const counted=selected.has(id);
     const multiplier=counted&&id===doubledId?2:1;
     return {
@@ -84,7 +84,7 @@ async function publishedData(client,rounds,players,managerCount,currentRound){
   // It is a league-wide aggregate, not another manager's unannounced roster.
   const [stats,ownership]=await Promise.all([
     publishedIds.length?paged(()=>client.from('player_round_stats')
-      .select('round_id,player_id,attended,goals,assists,clean_sheets,penalty_saves,penalty_misses,own_goals,goals_conceded,champion')
+      .select('round_id,player_id,attended,goals,assists,clean_sheets,penalty_saves,penalty_misses,own_goals,goals_conceded,goal_difference,champion')
       .in('round_id',publishedIds).order('round_id',{ascending:true}).order('player_id',{ascending:true})):
       Promise.resolve([]),
     currentRound?paged(()=>client.from('roster_entries')
@@ -93,10 +93,11 @@ async function publishedData(client,rounds,players,managerCount,currentRound){
   ]);
 
   const lastStats=lastRound?stats.filter(s=>String(s.round_id)===String(lastRound.id)):[];
+  const roundNumbers=new Map(rounds.map(r=>[String(r.id),Number(r.round_number)]));
   return {
     lastRound,
     lastStats,
-    seasonPlayers:buildSeason(players,stats,publishedIds,ownership,managerCount)
+    seasonPlayers:buildSeason(players,stats,publishedIds,ownership,managerCount,roundNumbers)
   };
 }
 module.exports={paged,buildSeason,scoredRoster,publishedData};
