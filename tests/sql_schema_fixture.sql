@@ -4,11 +4,12 @@ CREATE ROLE authenticated;
 CREATE ROLE service_role;
 CREATE TABLE public.managers (id uuid PRIMARY KEY,username text,is_admin boolean NOT NULL DEFAULT false);
 CREATE TABLE public.rounds (id bigint PRIMARY KEY,round_number integer,deadline_at timestamptz,status text);
-CREATE TABLE public.players (id bigint PRIMARY KEY,name text,position text,active boolean DEFAULT true);
+CREATE TABLE public.players (id bigint PRIMARY KEY,name text,position text,price numeric NOT NULL DEFAULT 5,active boolean DEFAULT true);
 CREATE TABLE public.roster_entries (
   round_id bigint NOT NULL,manager_id uuid NOT NULL,player_id bigint NOT NULL,
   slot text NOT NULL,is_captain boolean DEFAULT false,is_vice_captain boolean DEFAULT false
 );
+CREATE TABLE public.transfers (round_id bigint,manager_id uuid,player_out_id bigint,player_in_id bigint);
 CREATE TABLE public.manager_round_points (
   round_id bigint NOT NULL, manager_id uuid NOT NULL, points integer NOT NULL,
   PRIMARY KEY(round_id,manager_id)
