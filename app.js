@@ -121,7 +121,7 @@ async function saveTeam(){
  if(draft.length!==8)return flash('Сначала набери 8 игроков.',true);
  if(!draft.some(x=>x.is_captain)||!draft.some(x=>x.is_vice_captain))return flash('Выбери капитана и вице-капитана.',true);
  if(saving)return;saving=true;
- try{const r=await api('save',{roster:draft});await refresh();flash('Состав сохранён на сервере. Использовано трансферов: '+r.transfers+' из 2.');}
+ try{const free=Boolean(data?.round?.unlimited_transfers);const r=await api('save',{roster:draft});await refresh();flash(free?'Новый состав сохранён. В этом туре количество трансферов не ограничено.':'Состав сохранён на сервере. Использовано трансферов: '+r.transfers+' из 2.');}
  catch(e){flash(e.message,true);}finally{saving=false;}
 }
 function teamHtml(){
@@ -133,13 +133,13 @@ function teamHtml(){
    (p.position!=='Вратарь'?'<button class="small-btn" data-action="move" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>'+(starter?'В запас':'В основу')+'</button>':'')+
    '<button class="small-btn" data-action="remove" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>×</button></div></div>';
  }).join('');
- return myLastTourHtml()+'<div class="columns"><section class="panel"><h2>Твой состав</h2><p class="muted">На поле — 5 полевых по схеме 1–2–2 и вратарь</p><div class="pitch"><div class="formation">'+
+ return myLastTourHtml()+(data.round?.unlimited_transfers&&!locked()?'<div class="message">Тур №'+data.round.round_number+': <strong>неограниченные бесплатные трансферы</strong> до 18 ноября, 20:30 по Риге. Можно полностью пересобрать восьмёрку, менять капитана и запасных. Очки прошлого тура сохраняются выше.</div>':'')+'<div class="columns"><section class="panel"><h2>Твой состав · тур №'+data.round?.round_number+'</h2><p class="muted">На поле — 5 полевых по схеме 1–2–2 и вратарь</p><div class="pitch"><div class="formation">'+
   '<div class="slot front">'+chip('starter:0','Нападение')+'</div>'+
   ['mid-left','mid-right','back-left','back-right'].map((c,i)=>'<div class="slot '+c+'">'+chip('starter:'+(i+1),'Основа')+'</div>').join('')+
   '<div class="slot keeper">'+chip('goalkeeper','Вратарь')+'</div></div></div>'+
   '<div class="bench">'+chip('bench1','Запас 1')+chip('bench2','Запас 2')+'</div>'+
   '<div class="actions"><button class="outline" data-action="swap" '+(locked()?'disabled':'')+'>Порядок запаса ⇄</button><button class="primary" data-action="save" '+(locked()?'disabled':'')+'>Сохранить состав</button></div>'+
-  (locked()?'<div class="warning">Тур закрыт: изменения состава недоступны.</div>':'<p class="muted">Изменения становятся действительными только после нажатия «Сохранить состав».</p>')+
+  (locked()?'<div class="warning">Тур закрыт: изменения состава недоступны.</div>':'<p class="muted">Изменения становятся действительными только после нажатия «Сохранить состав». '+(data.round?.unlimited_transfers?'Лимита трансферов в этом туре нет.':'')+'</p>')+
   '</section><section class="panel"><h2>Управление составом</h2><p class="muted">К — капитан, ВК — вице-капитан. Перестановки между основой и запасом бесплатны.</p>'+
   (rows||'<p class="subtle">Пока нет игроков. Открой рынок.</p>')+
   '<div class="actions"><button class="primary" data-tab="market">'+(draft.length?'Открыть рынок':'Выбрать игроков')+'</button></div></section></div>';
@@ -191,7 +191,7 @@ function playerPointsHtml(){
 }
 function rulesHtml(){
  const scoring=[['Участие','+1'],['Гол полевого','+5'],['Гол вратаря','+10'],['Голевая передача','+3'],['Сухой 10-минутный матч полевого','+1'],['Сухой 10-минутный матч вратаря','+3'],['Отбитый пенальти','+5'],['Незабитый пенальти','−2'],['Автогол','−2'],['Чемпион вечера','+2'],['Каждые 2 пропущенных гола команды за весь вечер','−1 каждому футболисту']];
- return '<section class="panel rules"><h2>Правила Sreda Fantasy</h2><ul><li>Бюджет — <strong>50.0</strong>. В составе 1 вратарь, 5 полевых в основе и 2 полевых в запасе.</li><li>На каждый тур доступно <strong>2 трансфера</strong>, они не переносятся.</li><li>Дедлайн — <strong>среда, 20:30 Europe/Riga</strong>. После него изменения заблокированы.</li><li>При отсутствии полевого игрока основы вступает присутствующий запасной, по приоритету 1 → 2. Вратарь без замены.</li><li>Капитан получает ×2, если присутствовал. Если нет — ×2 получает присутствующий вице-капитан.</li></ul><h2>Очки за игру</h2><table class="league">'+scoring.map(s=>'<tr><td>'+s[0]+'</td><td>'+s[1]+'</td></tr>').join('')+'</table><p class="muted">Штраф за пропущенные голы применяется к каждому участвовавшему футболисту, включая вратаря. Для капитана он тоже удваивается.</p></section>';
+ return '<section class="panel rules"><h2>Правила Sreda Fantasy</h2><ul><li>Бюджет — <strong>50.0</strong>. В составе 1 вратарь, 5 полевых в основе и 2 полевых в запасе.</li><li>Обычно доступно <strong>2 трансфера за тур</strong>, они не переносятся. В турах с режимом свободной пересборки число трансферов не ограничено.</li><li>Дедлайн — <strong>среда, 20:30 Europe/Riga</strong>. После него изменения заблокированы.</li><li>При отсутствии полевого игрока основы вступает присутствующий запасной, по приоритету 1 → 2. Вратарь без замены.</li><li>Капитан получает ×2, если присутствовал. Если нет — ×2 получает присутствующий вице-капитан.</li></ul><h2>Очки за игру</h2><table class="league">'+scoring.map(s=>'<tr><td>'+s[0]+'</td><td>'+s[1]+'</td></tr>').join('')+'</table><p class="muted">Штраф за пропущенные голы применяется к каждому участвовавшему футболисту, включая вратаря. Для капитана он тоже удваивается.</p></section>';
 }
 function render(){
  if(!data)return;
@@ -203,7 +203,8 @@ function render(){
  $('round-badge').textContent=data.round?'Тур №'+data.round.round_number+(data.locked?' · закрыт':' · открыт'):'Тур не создан';
  $('login-btn').textContent=data.user?data.user.username+' · Выход':'Войти';
  $('budget').textContent=cash(50-used());$('count').textContent=draft.length+' / 8';
- $('transfers').textContent=(2-data.transfers)+' / 2';
+ $('transfers').textContent=data.round?.unlimited_transfers?'∞':(2-data.transfers)+' / 2';
+ $('transfers').nextElementSibling.textContent=data.round?.unlimited_transfers?'бесплатно до дедлайна':'на текущий тур';
  $('deadline-short').textContent=data.round?new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Riga',day:'numeric',month:'short'}).format(new Date(data.round.deadline_at)):'—';
  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
  $('content').innerHTML=tab==='team'?teamHtml():tab==='market'?marketHtml():tab==='league'?leagueHtml():tab==='points'?playerPointsHtml():tab==='admin'?sfHtml():rulesHtml();
