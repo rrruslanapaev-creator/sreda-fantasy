@@ -37,3 +37,8 @@
 .modal-total strong{font-size:28px;color:#a5f3bf}
 .modal-roster-scroll{max-height:60vh;overflow-y:auto}
 @media(max-width:600px){.tour-history-list{grid-template-columns:1fr}.dialog{padding:16px}.entry-actions{gap:4px}.entry-actions .score-badge{min-width:40px;padding:4px 6px}}
+
+/* Show unused bench footballers' individual scores without counting them in fantasy totals. */
+.score-badge-unused{background:#26352e;border-color:#66786d;color:#dce6dd}
+.score-badge-unused small{color:#b3c1b5}
+.chip-score-unused{background:#dfeddf;color:#3c4d40;font-size:11px}
