@@ -105,3 +105,28 @@ test('Historical scored roster uses the scoring rule of its own round',()=>{
  assert.equal(upcoming.find(e=>e.player_id===7).raw_points,-1);
  assert.equal(upcoming.find(e=>e.player_id===7).points,0);
 });
+
+test('Bench Boost includes both present bench footballers without duplicating starter points',()=>{
+ const normal=scoredRoster(roster,stats,players,2);
+ const boosted=scoredRoster(roster,stats,players,2,'bench_boost');
+ assert.equal(normal.reduce((sum,e)=>sum+e.points,0),7);
+ assert.equal(boosted.reduce((sum,e)=>sum+e.points,0),9);
+ assert.equal(boosted.find(e=>e.player_id===7).points,1);
+ assert.equal(boosted.find(e=>e.player_id===8).points,1);
+});
+test('Triple Captain adds exactly two captain points and honors absent-captain fallback',()=>{
+ const boosted=scoredRoster(roster,stats,players,2,'triple_captain');
+ assert.equal(boosted.find(e=>e.player_id===2).multiplier,3);
+ assert.equal(boosted.find(e=>e.player_id===2).points,3);
+ assert.equal(boosted.reduce((sum,e)=>sum+e.points,0),8);
+ const absent=stats.map(x=>({...x,attended:x.player_id!==2,goals:x.player_id===7?2:0}));
+ const fallback=scoredRoster(roster,absent,players,2,'triple_captain');
+ assert.equal(fallback.find(e=>e.player_id===3).multiplier,3);
+ assert.equal(fallback.find(e=>e.player_id===3).points,3);
+ assert.equal(fallback.reduce((sum,e)=>sum+e.points,0),18);
+});
+test('Wildcard and Free Hit do not themselves modify individual or captain scoring',()=>{
+ const normal=scoredRoster(roster,stats,players,2).map(e=>e.points);
+ assert.deepEqual(scoredRoster(roster,stats,players,2,'free_hit').map(e=>e.points),normal);
+ assert.deepEqual(scoredRoster(roster,stats,players,2,'wildcard').map(e=>e.points),normal);
+});
