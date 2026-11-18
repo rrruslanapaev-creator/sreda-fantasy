@@ -105,3 +105,44 @@ test('Historical scored roster uses the scoring rule of its own round',()=>{
  assert.equal(upcoming.find(e=>e.player_id===7).raw_points,-1);
  assert.equal(upcoming.find(e=>e.player_id===7).points,0);
 });
+
+test('Average points per tour counts only published rounds and includes absences as zero',()=>{
+ const p=[{id:1,name:'Attack',position:'Полевой'},
+   {id:2,name:'Keeper',position:'Вратарь'}];
+ const s=[
+  {round_id:1,player_id:1,attended:true,goals:1}, // round 1: 6
+  {round_id:2,player_id:1,attended:false}, // round 2: 0
+  {round_id:3,player_id:1,attended:true,goals:3}, // unpublished: ignored
+  {round_id:1,player_id:2,attended:true,clean_sheets:1} // 4 points over 2 tours
+ ];
+ const result=buildSeason(p,s,[1,2,2],[],3,new Map([['1',1],['2',2],['3',3]]));
+ const byId=new Map(result.map(x=>[x.player_id,x]));
+ assert.equal(byId.get(1).season_points,6);
+ assert.equal(byId.get(1).average_points_per_round,3);
+ assert.equal(byId.get(2).season_points,4);
+ assert.equal(byId.get(2).average_points_per_round,2);
+});
+test('Average has one decimal and no published tours gives no average',()=>{
+ const p=[{id:1,name:'A',position:'Полевой'}];
+ const s=[
+  {round_id:1,player_id:1,attended:true,goals:1},
+  {round_id:2,player_id:1,attended:true},
+  {round_id:3,player_id:1,attended:false}
+ ];
+ const three=buildSeason(p,s,[1,2,3],[],1);
+ assert.equal(three[0].season_points,7);
+ assert.equal(three[0].average_points_per_round,2.3);
+ const zero=buildSeason(p,s,[],[],1);
+ assert.equal(zero[0].season_points,0);
+ assert.equal(zero[0].average_points_per_round,null);
+});
+test('Negative per-tour scores are averaged without clipping',()=>{
+ const p=[{id:4,name:'Penalty',position:'Полевой'}];
+ const s=[
+  {round_id:2,player_id:4,attended:true,goal_difference:-6}, // 1 - 2 = -1
+  {round_id:3,player_id:4,attended:true,goal_difference:-3} // 1 - 1 = 0
+ ];
+ const r=buildSeason(p,s,[2,3],[],1,new Map([['2',2],['3',3]]));
+ assert.equal(r[0].season_points,-1);
+ assert.equal(r[0].average_points_per_round,-0.5);
+});
