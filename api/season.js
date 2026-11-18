@@ -30,6 +30,9 @@ function buildSeason(players,stats,publishedIds,ownership,managerCount,roundNumb
     rosterCount.set(pid,(rosterCount.get(pid)||0)+1);
   }
   const totals=new Map();
+  // One denominator for every player: all distinct published league rounds.
+  // A missed round contributes zero, and unpublished/test rounds do not count.
+  const publishedRoundCount=pubIds.size;
   for(const stat of stats){
     if(!pubIds.has(String(stat.round_id)))continue;
     const pid=String(stat.player_id);
@@ -39,8 +42,10 @@ function buildSeason(players,stats,publishedIds,ownership,managerCount,roundNumb
   }
   return rankRows(players.map(p=>{
     const owners=rosterCount.get(String(p.id))||0;
+    const seasonPoints=totals.get(String(p.id))||0;
     return {
-      player_id:p.id,name:p.name,position:p.position,season_points:totals.get(String(p.id))||0,
+      player_id:p.id,name:p.name,position:p.position,season_points:seasonPoints,
+      average_points_per_round:publishedRoundCount?Math.round(seasonPoints/publishedRoundCount*10)/10:null,
       owners,ownership_percent:managerCount>0?Math.round(owners/managerCount*1000)/10:0
     };
   }));
