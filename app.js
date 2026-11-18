@@ -81,7 +81,19 @@ async function api(action,payload){
  return result;
 }
 async function refresh(){
- try{data=await api();draft=(data.roster||[]).map(x=>({...x,player_id:Number(x.player_id)}));render();}
+ try{
+   data=await api();
+   if(data.previewMode){
+     try{
+       const saved=JSON.parse(sessionStorage.getItem('sf_design_demo_squad')||'null');
+       if(Array.isArray(saved)&&saved.length<=8&&saved.every(e=>data.players.some(p=>Number(p.id)===Number(e.player_id))))
+         data.roster=saved;
+     }catch{/* Corrupt demo state is ignored. */}
+   }
+   draft=(data.roster||[]).map(x=>({...x,player_id:Number(x.player_id)}));
+   render();
+   if(data.previewMode)$('notice').innerHTML='<div class="message" role="status"><strong>Проверка дизайна.</strong> Состав демонстрационный; изменения сохраняются только в этом браузере. Рабочие аккаунты и база не меняются.</div>';
+ }
  catch(e){$('content').innerHTML='<section class="panel"><h2>Сайт пока не настроен</h2><p class="subtle">'+esc(e.message)+'</p><p>Подключи Supabase к Vercel и выполни SQL-миграцию.</p></section>';
  $('round-badge').textContent='Нет соединения';}
 }
@@ -152,6 +164,12 @@ async function saveTeam(){
  if(draft.length!==8)return flash('Сначала набери 8 игроков.',true);
  if(!draft.some(x=>x.is_captain)||!draft.some(x=>x.is_vice_captain))return flash('Выбери капитана и вице-капитана.',true);
  if(used()>budgetLimit+0.001)return flash('Бюджет превышен на '+cash(used()-budgetLimit)+'. Замени футболистов, чтобы уложиться в 50.0.',true);
+ if(data?.previewMode){
+   data.roster=draft.map(x=>({...x}));
+   sessionStorage.setItem('sf_design_demo_squad',JSON.stringify(data.roster));
+   render();
+   return flash('Демо-состав сохранён только в этом браузере. На основном сайте ничего не изменилось.');
+ }
  if(saving)return;saving=true;
  try{const free=Boolean(data?.round?.unlimited_transfers);const r=await api('save',{roster:draft});await refresh();flash(free?'Новый состав сохранён. В этом туре количество трансферов не ограничено.':'Состав сохранён на сервере. Использовано трансферов: '+r.transfers+' из 2.');}
  catch(e){flash(e.message,true);}finally{saving=false;}
@@ -263,7 +281,8 @@ function render(){
   }
  ensureDisplaySlots();
  $('round-badge').textContent=data.round?'Тур №'+data.round.round_number+(data.locked?' · закрыт':' · открыт'):'Тур не создан';
- $('login-btn').textContent=data.user?data.user.username+' · Выход':'Войти';
+ $('login-btn').textContent=data.previewMode?'Демо-режим':data.user?data.user.username+' · Выход':'Войти';
+  $('login-btn').disabled=!!data.previewMode;
  $('budget').textContent=cash(budgetLimit-used());
  $('budget').closest('.metric').classList.toggle('budget-over',used()>budgetLimit+0.001);
  $('count').textContent=draft.length+' / 8';
