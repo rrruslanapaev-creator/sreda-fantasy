@@ -305,12 +305,43 @@ function marketRows(players){return players.map(p=>{
  return '<div class="entry"><div class="entry-info"><strong>'+esc(p.name)+'</strong><small>'+pos(p)+'</small></div><strong class="price">'+cash(p.price)+'</strong>'+
   '<button class="small-btn" data-action="'+(selected?'remove':'add')+'" data-id="'+p.id+'" '+((selected?!locked():roomFor(p))?'':'disabled')+'>'+(selected?'Убрать':'Добавить')+'</button></div>';
 }).join('')||'<p class="muted">Игроки не найдены.</p>';}
+// Source of truth: backend aggregates current-round ownership over ALL managers.
+function ownershipDetails(playerID){
+ const info=(data?.seasonPlayers||[]).find(p=>Number(p.player_id)===Number(playerID));
+ if(!info)return null;
+ const leagueSize=data?.leaderboard?.length||0;
+ return {percent:Number(info.ownership_percent).toLocaleString('ru-RU',{
+   minimumFractionDigits:1,maximumFractionDigits:1
+ })+'%',owners:Number(info.owners)||0,leagueSize};
+}
+function ownershipText(playerID){
+ const owners=ownershipDetails(playerID);
+ return owners?'Владение: '+owners.percent+' ('+owners.owners+' из '+owners.leagueSize+')':'Владение: —';
+}
+function popularPlayersHtml(){
+ const total=(data?.seasonPlayers||[]).length;
+ const popular=(data?.seasonPlayers||[]).slice()
+  .sort((a,b)=>Number(b.ownership_percent)-Number(a.ownership_percent)||
+    Number(b.owners)-Number(a.owners)||a.name.localeCompare(b.name,'ru'))
+  .slice(0,10);
+ if(!popular.length)return '';
+ return '<section class="panel league-ownership"><h2>Самые популярные футболисты</h2>'+
+  '<p class="muted">Процент владения от всех зарегистрированных менеджеров лиги. Показаны десять самых популярных футболистов.</p>'+
+  '<div class="table-scroll"><table class="league player-points-table"><thead>'+
+  '<tr><th>Футболист</th><th>Очки за сезон</th><th>Владение</th></tr></thead><tbody>'+
+  popular.map(p=>'<tr><td><strong>'+esc(p.name)+'</strong></td>'+
+   '<td class="numeric">'+scored(p.season_points)+'</td>'+
+   '<td class="numeric"><strong>'+ownershipDetails(p.player_id).percent+'</strong>'+
+   ' <small>('+p.owners+'/'+(data?.leaderboard?.length||0)+')</small></td></tr>').join('')+
+  '</tbody></table></div>'+
+  '<p class="muted">Всего футболистов: '+total+'. <button class="link" data-tab="points">Посмотреть владение всеми футболистами</button></p></section>';
+}
 function leagueHtml(){
  const people=data?.leaderboard||[];
  return '<section class="panel"><h2>Таблица менеджеров</h2><p class="muted">Нажми на имя, чтобы посмотреть состав и вклад каждого футболиста в последнем завершённом туре. Составы ещё не завершённых туров скрыты до дедлайна.</p>'+
   '<table class="league"><thead><tr><th>№</th><th>Менеджер</th><th>Очки за сезон</th></tr></thead><tbody>'+
   people.map((m,i)=>'<tr><td>'+(i+1)+'</td><td><button class="link" data-action="view" data-id="'+esc(m.id)+'">'+esc(m.username)+'</button></td><td>'+scored(m.points)+'</td></tr>').join('')+
-  '</tbody></table>'+(people.length?'':'<p class="muted">Менеджеров пока нет.</p>')+'</section>';
+  '</tbody></table>'+(people.length?'':'<p class="muted">Менеджеров пока нет.</p>')+'</section>'+popularPlayersHtml();
 }
 function playerPointsHtml(){
  const players=data?.seasonPlayers||[];
@@ -380,21 +411,35 @@ async function openManager(managerID){
  const round=data?.lastRound||data?.round;
  if(!round)return flash('Тур не создан.',true);
  try{
-  const response=await fetch('/api/handler?action=roster&manager='+encodeURIComponent(managerID)+'&round='+round.id);
-  const payload=await response.json();if(!response.ok)throw Error(payload.error||'Доступ закрыт');
+  let payload;
+  if(data?.previewMode){
+   // Production rosters for the upcoming round must remain private until deadline.
+   // Show only a local demo lineup in preview, never another manager's real squad.
+   payload={roster:data.roster||[],published:false,demo:true};
+  }else{
+   const response=await fetch('/api/handler?action=roster&manager='+encodeURIComponent(managerID)+'&round='+round.id);
+   payload=await response.json();
+   if(!response.ok)throw Error(payload.error||'Доступ закрыт');
+  }
   const manager=data.leaderboard.find(m=>m.id===managerID);
   const roster=payload.roster||[];
   const total=payload.published?'<div class="modal-total"><span>Очки за тур №'+round.round_number+'</span><strong>'+scored(payload.points)+'</strong></div>':'';
   const content=roster.length?roster.map(e=>{
     const p=byId(e.player_id);
     const meta=esc(slotTitle(e))+(e.is_captain?' · капитан':e.is_vice_captain?' · вице-капитан':'');
+    const involvement=payload.published?(e.attended?(e.counted?(e.substituted?' · вышел на замену':''):(e.slot==='bench1'||e.slot==='bench2'?' · не вышел':'')):' · не играл'):'';
     return '<div class="entry"><div class="entry-info"><strong>'+esc(p?.name||'Футболист №'+e.player_id)+'</strong>'+
-      '<small>'+meta+(payload.published?(e.attended?(e.counted?(e.substituted?' · вышел на замену':''):(e.slot==='bench1'||e.slot==='bench2'?' · не вышел':'')):' · не играл'):'')+'</small></div>'+
+      '<small>'+meta+involvement+'</small>'+
+      '<small class="owner-percent">'+esc(ownershipText(e.player_id))+'</small></div>'+
       (payload.published?scoreBadge(e):'<span>'+esc(e.is_captain?'К':e.is_vice_captain?'ВК':'')+'</span>')+'</div>';
    }).join(''):'<p class="subtle">Состав не сохранён.</p>';
   $('modal').hidden=false;
   $('modal').innerHTML='<div class="dialog"><h2>'+esc(manager?.username||'Менеджер')+'</h2>'+
-   (payload.published?'<p class="muted">Состав последнего опубликованного тура №'+round.round_number+'. Очки включают капитанские бонусы и замены.</p>':'<p class="muted">Состав тура №'+round.round_number+'</p>')+
+   (payload.demo
+     ?'<p class="muted"><strong>Демонстрация просмотра состава.</strong> Показан пример команды, а не реальный состав этого менеджера. Настоящие составы следующего тура остаются скрыты до дедлайна.</p>'
+     :payload.published
+       ?'<p class="muted">Состав последнего опубликованного тура №'+round.round_number+'. Очки включают капитанские бонусы и замены.</p>'
+       :'<p class="muted">Состав тура №'+round.round_number+'</p>')+
    total+'<div class="modal-roster-scroll">'+content+'</div>'+
    '<div class="actions"><button class="outline" data-action="close">Закрыть</button></div></div>';
  }catch(e){flash(e.message,true);}
