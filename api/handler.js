@@ -111,8 +111,30 @@ async function state(client,user){
     myLastTour
   };
 }
+// Preview deployments share deployment settings by default. Never let them write
+// to the production Supabase project, even if a visitor forges an API POST.
+const isPreview=()=>process.env.VERCEL_ENV==='preview';
+function sampleRoster(players){
+ const active=(players||[]).filter(p=>p.active!==false);
+ const preferred=['Спратус','Мартин Ст.','Жан','Руслан Ап.','Петя Бо.','Саша Со.','Ваня Во.','Глеб Ба.'];
+ const keeper=active.find(p=>p.name==='Спратус'&&p.position==='Вратарь')||active.find(p=>p.position==='Вратарь');
+ const selected=active.filter(p=>p.position!=='Вратарь'&&preferred.includes(p.name))
+   .sort((a,b)=>preferred.indexOf(a.name)-preferred.indexOf(b.name));
+ for(const candidate of active.filter(p=>p.position!=='Вратарь').sort((a,b)=>Number(a.price)-Number(b.price))){
+   if(selected.length>=7)break;
+   if(!selected.some(p=>p.id===candidate.id))selected.push(candidate);
+ }
+ if(!keeper)return [];
+ const all=[keeper,...selected.slice(0,7)];
+ // Demo is visual only; real squads continue to use the server's budget checks.
+ return all.map((p,i)=>({
+   player_id:p.id,slot:i===0?'goalkeeper':i<=5?'starter':i===6?'bench1':'bench2',
+   is_captain:i===2,is_vice_captain:i===1
+ }));
+}
 module.exports=async function handler(req,res){
   if(req.method!=='GET'&&req.method!=='POST')return send(res,405,{error:'Метод не поддерживается'});
+  if(isPreview()&&req.method==='POST')return send(res,403,{error:'Проверочная версия доступна только для просмотра. Рабочая база не изменяется.'});
   if(req.method==='POST'&&!originValid(req))return send(res,403,{error:'Запрос с другого сайта отклонён'});
   try{
     const client=db(),user=await currentUser(client,req);
@@ -151,7 +173,15 @@ module.exports=async function handler(req,res){
           published:true
         });
       }
-      return send(res,200,await state(client,user));
+      const result=await state(client,isPreview()?null:user);
+      if(isPreview()){
+        result.previewMode=true;
+        result.user={id:'demo-preview',username:'Демо-состав'};
+        result.roster=sampleRoster(result.players);
+        result.locked=false;
+        result.transfers=0;
+      }
+      return send(res,200,result);
     }
     const body=typeof req.body==='object'&&req.body!==null?req.body:{};
     if(body.action==='login'||body.action==='register'){
