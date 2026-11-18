@@ -12,6 +12,7 @@ const impl=app.slice(from,until);
 function make(count=12){
  const sample=Array.from({length:count},(_,i)=>({
   player_id:i+1,name:'Игрок '+(i+1),position:'Полевой',season_points:100-i,
+  average_points_per_round:i===0?3.5:i===1?0:i===2?null:1.2,
   owners:i===0?4:i===1?7:i===2?2:i===3?0:1,
   ownership_percent:i===0?40:i===1?70:i===2?20:i===3?0:10
  }));
@@ -22,7 +23,7 @@ function make(count=12){
   data,esc:v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;'),
   scored:n=>String(n),Number
  };
- return {data,api:vm.runInNewContext(impl+';({ownershipText,popularPlayersHtml,leagueHtml,playerPointsHtml})',ctx)};
+ return {data,api:vm.runInNewContext(impl+';({ownershipText,popularPlayersHtml,leagueHtml,playerPointsHtml,displayAveragePoints})',ctx)};
 }
 test('League shows ten most popular footballers sorted by ownership, not season points',()=>{
  const {api}=make();
@@ -37,14 +38,30 @@ test('League shows ten most popular footballers sorted by ownership, not season 
  assert.match(h,/7\/10/);
  assert.match(h,/data-tab="points"/);
 });
-test('The old Players section still shows ownership of every footballer',()=>{
+test('Players has only total, published-round average and ownership columns',()=>{
  const {api}=make();
  const h=api.playerPointsHtml();
  assert.match(h,/Очки футболистов/);
+ assert.match(h,/Всего очков/);
+ assert.match(h,/Среднее за тур/);
  assert.match(h,/Владение/);
  assert.match(h,/0,0%/);
  assert.match(h,/70,0%/);
  assert.match(h,/Игрок 12/);
+ assert.match(h,/3,5/);
+ assert.match(h,/—/);
+ const headings=Array.from(h.matchAll(/<th>/g));
+ assert.equal(headings.length,4); // name + precisely three requested metrics
+ for(const heading of ['Форма','Голы','Ассисты','Рейтинг','Купили','Продали']) {
+   assert.doesNotMatch(h,new RegExp('<th>'+heading+'</th>'));
+ }
+});
+test('Missing average is not misrepresented as zero before any results are published',()=>{
+ const {api}=make();
+ assert.equal(api.displayAveragePoints(null),'—');
+ assert.equal(api.displayAveragePoints(undefined),'—');
+ assert.equal(api.displayAveragePoints(0),'0,0');
+ assert.equal(api.displayAveragePoints(2.3),'2,3');
 });
 test('Manager roster ownership uses all registered managers as the denominator',()=>{
  const {api}=make();
