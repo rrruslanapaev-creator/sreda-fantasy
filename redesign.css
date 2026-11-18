@@ -167,3 +167,8 @@ body.theme-fpl footer{color:#93879b;text-align:center;font-size:11px;margin-top:
  .mobile-nav button span{font-size:21px;line-height:1.1}
  .mobile-nav button.active{color:var(--sf-purple);font-weight:900}
 }
+body.theme-fpl .boost-card-active{background:#e2ffb9;border-color:#9cc95c;box-shadow:0 0 0 2px #c6ff7955}
+body.theme-fpl .boost-card-active .boost-glyph{background:var(--sf-lime)}
+body.theme-fpl .boost-card:disabled{cursor:not-allowed;opacity:.65}
+body.theme-fpl .boost-card-active:disabled{opacity:.95}
+@media(max-width:600px){.mobile-nav.has-admin{grid-template-columns:repeat(6,minmax(0,1fr))}.mobile-nav.has-admin button{font-size:8px}}
