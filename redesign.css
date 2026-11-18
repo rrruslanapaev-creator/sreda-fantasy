@@ -159,7 +159,7 @@ body.theme-fpl footer{color:#93879b;text-align:center;font-size:11px;margin-top:
  body.theme-fpl .nav button{display:none}
  body.theme-fpl .league th,body.theme-fpl .league td{padding:10px 5px;font-size:11px}
  body.theme-fpl .league .link{font-size:11px}
- body.theme-fpl .player-points-table{min-width:350px}
+ body.theme-fpl .player-points-table{min-width:490px}
  body.theme-fpl footer{font-size:9px;padding:0 10px}
  body.theme-fpl .dialog{padding:17px}
  .mobile-nav{position:fixed;bottom:0;left:0;right:0;z-index:35;display:grid;grid-template-columns:repeat(5,1fr);background:#fff;border-top:1px solid #ede5f2;padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -3px 16px #260e3117}
