@@ -210,7 +210,7 @@ BEGIN
      SELECT pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
        'player_id',e.player_id,'slot',e.slot,
        'is_captain',e.is_captain,'is_vice_captain',e.is_vice_captain
-     ) ORDER BY e.id) INTO snapshot
+     ) ORDER BY e.player_id) INTO snapshot
      FROM public.roster_entries e
      WHERE e.manager_id=p_manager AND e.round_id=live_round.id;
      IF snapshot IS NULL THEN
@@ -219,7 +219,7 @@ BEGIN
        SELECT pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
          'player_id',e.player_id,'slot',e.slot,
          'is_captain',e.is_captain,'is_vice_captain',e.is_vice_captain
-       ) ORDER BY e.id) INTO snapshot
+       ) ORDER BY e.player_id) INTO snapshot
        FROM public.roster_entries e WHERE e.manager_id=p_manager AND e.round_id=prev_round;
      END IF;
    END IF;
