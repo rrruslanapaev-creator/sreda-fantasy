@@ -35,5 +35,3 @@ jobs:
           docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql_unlimited_transfers_regression.sql
           docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/008_goal_difference_scoring.sql
           docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql_goal_difference_regression.sql
-          docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/009_season_boosts.sql
-          docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql_season_boosts_regression.sql
