@@ -156,6 +156,21 @@ async function saveTeam(){
  try{const free=Boolean(data?.round?.unlimited_transfers);const r=await api('save',{roster:draft});await refresh();flash(free?'Новый состав сохранён. В этом туре количество трансферов не ограничено.':'Состав сохранён на сервере. Использовано трансферов: '+r.transfers+' из 2.');}
  catch(e){flash(e.message,true);}finally{saving=false;}
 }
+// Only the four visual boost states are previewed; no bonus is charged or activated.
+const futureBoosts=[
+ {id:'wildcard',name:'Вайлдкард',symbol:'↺',desc:'Пересобрать и сохранить'},
+ {id:'free_hit',name:'Фри-хит',symbol:'⇄',desc:'Состав на один тур'},
+ {id:'triple_captain',name:'Тройной капитан',symbol:'×3',desc:'Очки капитана ×3'},
+ {id:'bench_boost',name:'Бенч-буст',symbol:'＋',desc:'Очки двух запасных'}
+];
+function boostPanelHtml(){
+ return '<section class="boost-panel"><div class="boost-title"><h3>Бонусы сезона</h3><small>Каждый — один раз за сезон</small></div>'+
+  '<div class="boost-grid">'+futureBoosts.map(b=>
+   '<button class="boost-card" type="button" disabled title="Откроется после проверки серверной механики">'+
+   '<span class="boost-glyph" aria-hidden="true">'+esc(b.symbol)+'</span><b>'+esc(b.name)+'</b>'+
+   '<span>'+esc(b.desc)+'</span></button>').join('')+
+  '</div><p class="boost-preview-note">Проверочная версия дизайна. Бусты пока не активированы и не влияют на очки.</p></section>';
+}
 function teamHtml(){
  if(!data?.user)return '<section class="panel"><h2>Собери свою команду</h2><p class="subtle">Войди по имени и PIN или зарегистрируй нового менеджера. Состав будет храниться в общей базе.</p><button class="primary" data-action="login">Войти / создать менеджера</button></section>';
  const rows=draft.map(e=>{const p=byId(e.player_id);if(!p)return '';
@@ -165,7 +180,7 @@ function teamHtml(){
    (p.position!=='Вратарь'?'<button class="small-btn" data-action="move" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>'+(starter?'В запас':'В основу')+'</button>':'')+
    '<button class="small-btn" data-action="remove" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>×</button></div></div>';
  }).join('');
- return budgetAlertHtml()+myLastTourHtml()+(data.round?.unlimited_transfers&&!locked()?'<div class="message">Тур №'+data.round.round_number+': <strong>неограниченные бесплатные трансферы</strong> до 18 ноября, 20:30 по Риге. Можно полностью пересобрать восьмёрку, менять капитана и запасных. Очки прошлого тура сохраняются выше.</div>':'')+'<div class="columns"><section class="panel"><h2>Твой состав · тур №'+data.round?.round_number+'</h2><p class="muted">На поле — 5 полевых по схеме 1–2–2 и вратарь</p><div class="pitch"><div class="formation">'+
+ return budgetAlertHtml()+myLastTourHtml()+boostPanelHtml()+(data.round?.unlimited_transfers&&!locked()?'<div class="message">Тур №'+data.round.round_number+': <strong>неограниченные бесплатные трансферы</strong> до 18 ноября, 20:30 по Риге. Можно полностью пересобрать восьмёрку, менять капитана и запасных. Очки прошлого тура сохраняются выше.</div>':'')+'<div class="columns"><section class="panel"><h2>Твой состав · тур №'+data.round?.round_number+'</h2><p class="muted">На поле — 5 полевых по схеме 1–2–2 и вратарь</p><div class="pitch"><div class="formation">'+
   '<div class="slot front">'+chip('starter:0','Нападение')+'</div>'+
   ['mid-left','mid-right','back-left','back-right'].map((c,i)=>'<div class="slot '+c+'">'+chip('starter:'+(i+1),'Основа')+'</div>').join('')+
   '<div class="slot keeper">'+chip('goalkeeper','Вратарь')+'</div></div></div>'+
@@ -183,9 +198,13 @@ function ensureDisplaySlots(){
 function chip(slot,label){
  const e=draft.find(x=>x.displaySlot===slot);
  if(!e)return '<div class="chip placeholder">'+esc(label||'Пусто')+'</div>';
- const p=byId(e.player_id);return '<div class="chip">'+esc(p?.name||'?')+
-  '<small>'+(e.is_captain?'Капитан · ':e.is_vice_captain?'Вице · ':'')+cash(p?.price)+'</small>'+
-  (latestEntry(e.player_id)?'<span class="chip-score'+(unusedBench(latestEntry(e.player_id))?' chip-score-unused':'')+'">'+scored(displayedPlayerPoints(latestEntry(e.player_id)))+(unusedBench(latestEntry(e.player_id))?' · не вышел':'')+'</span>':'')+'</div>';
+ const p=byId(e.player_id);
+ const kit=p?.position==='Вратарь'?'keeper':'field';
+ const marker=e.is_captain?'<span class="chip-caption">К</span>':e.is_vice_captain?'<span class="chip-caption vice">В</span>':'';
+ const individual=latestEntry(e.player_id);
+ const points=individual?'<span class="chip-score'+(unusedBench(individual)?' chip-score-unused':'')+'">'+scored(displayedPlayerPoints(individual))+(unusedBench(individual)?' · не вышел':'')+'</span>':'';
+ return '<div class="chip">'+marker+'<img class="sf-kit" src="assets/sreda-kit-'+kit+'.svg" width="58" height="58" alt="" draggable="false">'+
+  '<span class="chip-name">'+esc(p?.name||'?')+'</span><small>'+cash(p?.price)+' млн</small>'+points+'</div>';
 }
 function marketHtml(){
  const filtered=(data?.players||[]).filter(p=>p.active!==false&&p.name.toLowerCase().includes(search.toLowerCase())&&(filter==='all'||(filter==='gk')===(p.position==='Вратарь')));
@@ -231,6 +250,17 @@ function render(){
  if(data.user?.is_admin){
   if(!adminNav){adminNav=document.createElement('button');adminNav.dataset.tab='admin';adminNav.textContent='Админка';document.querySelector('.nav').appendChild(adminNav);}
  }else if(adminNav){adminNav.remove();if(tab==='admin')tab='team';}
+  const mobileNav=document.querySelector('.mobile-nav');
+  if(mobileNav){
+    let mobileAdmin=mobileNav.querySelector('[data-tab="admin"]');
+    if(data.user?.is_admin&&!mobileAdmin){
+      mobileAdmin=document.createElement('button');mobileAdmin.dataset.tab='admin';
+      mobileAdmin.innerHTML='<span aria-hidden="true">⚙</span>Админка';mobileNav.appendChild(mobileAdmin);
+      mobileNav.classList.add('has-admin');
+    }else if(!data.user?.is_admin&&mobileAdmin){
+      mobileAdmin.remove();mobileNav.classList.remove('has-admin');
+    }
+  }
  ensureDisplaySlots();
  $('round-badge').textContent=data.round?'Тур №'+data.round.round_number+(data.locked?' · закрыт':' · открыт'):'Тур не создан';
  $('login-btn').textContent=data.user?data.user.username+' · Выход':'Войти';
@@ -240,7 +270,7 @@ function render(){
  $('transfers').textContent=data.round?.unlimited_transfers?'∞':(2-data.transfers)+' / 2';
  $('transfers').nextElementSibling.textContent=data.round?.unlimited_transfers?'бесплатно до дедлайна':'на текущий тур';
  $('deadline-short').textContent=data.round?new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Riga',day:'numeric',month:'short'}).format(new Date(data.round.deadline_at)):'—';
- document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+ document.querySelectorAll('button[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
  $('content').innerHTML=tab==='team'?teamHtml():tab==='market'?marketHtml():tab==='league'?leagueHtml():tab==='points'?playerPointsHtml():tab==='admin'?sfHtml():rulesHtml();
 }
 function openLogin(){
