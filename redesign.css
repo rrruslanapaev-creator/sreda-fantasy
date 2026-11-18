@@ -189,3 +189,16 @@ body.theme-fpl .swap-indicator{display:grid;place-items:center;flex:none;border-
  body.theme-fpl .chip-swap-selected{outline-width:3px;box-shadow:0 0 0 4px #3b175b99,0 0 14px #e6ff9f}
  body.theme-fpl .swap-guide{margin:8px -3px 3px;padding:8px;font-size:11px;min-height:44px}
 }
+
+/* Ownership figures in League standings and manager lineup details. */
+body.theme-fpl .league-ownership{margin-top:16px}
+body.theme-fpl .league-ownership .numeric{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+body.theme-fpl .league-ownership .numeric strong{color:var(--sf-purple)}
+body.theme-fpl .league-ownership .numeric small{color:#887c93}
+body.theme-fpl .owner-percent{display:block;margin-top:4px;color:#5f3a7b;font-size:11px;font-weight:750}
+body.theme-fpl .league-ownership .link{font-size:inherit;font-weight:850;text-decoration:underline;text-decoration-color:#ab90b9;text-underline-offset:3px}
+@media(max-width:600px){
+ body.theme-fpl .league-ownership{margin-top:11px}
+ body.theme-fpl .owner-percent{font-size:10px}
+ body.theme-fpl .league-ownership .numeric{font-size:11px}
+}
