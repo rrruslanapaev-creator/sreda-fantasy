@@ -45,7 +45,7 @@ function buildSeason(players,stats,publishedIds,ownership,managerCount,roundNumb
     };
   }));
 }
-function scoredRoster(roster,stats,players,roundNumber=1,boost=null){
+function scoredRoster(roster,stats,players,roundNumber=1){
   const playerById=new Map(players.map(p=>[String(p.id),p]));
   const statById=new Map(stats.map(s=>[String(s.player_id),s]));
   const presence=e=>statById.get(String(e.player_id))?.attended===true;
@@ -53,7 +53,7 @@ function scoredRoster(roster,stats,players,roundNumber=1,boost=null){
   const presentOutfield=playing.filter(e=>e.slot==='starter').length;
   const bench=roster.filter(e=>(e.slot==='bench1'||e.slot==='bench2')&&presence(e))
     .sort((a,b)=>(SLOT_ORDER[a.slot]??99)-(SLOT_ORDER[b.slot]??99))
-    .slice(0,boost==='bench_boost'?2:Math.max(0,5-presentOutfield));
+    .slice(0,Math.max(0,5-presentOutfield));
   const selected=new Set([...playing,...bench].map(e=>String(e.player_id)));
   const captain=roster.find(e=>e.is_captain&&selected.has(String(e.player_id)));
   const vice=!captain?roster.find(e=>e.is_vice_captain&&selected.has(String(e.player_id))):null;
@@ -64,7 +64,7 @@ function scoredRoster(roster,stats,players,roundNumber=1,boost=null){
     const player=playerById.get(id);
     const raw=player?playerPoints(stat,player.position,roundNumber):0;
     const counted=selected.has(id);
-    const multiplier=counted&&id===doubledId?(boost==='triple_captain'?3:2):1;
+    const multiplier=counted&&id===doubledId?2:1;
     return {
       player_id:e.player_id,slot:e.slot,is_captain:!!e.is_captain,
       is_vice_captain:!!e.is_vice_captain,
