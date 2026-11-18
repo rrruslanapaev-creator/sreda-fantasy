@@ -2,7 +2,7 @@
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const cash=n=>Number(n||0).toFixed(1);
-let data=null, draft=[], tab='team', search='', filter='all', saving=false, selectedBoost=null;
+let data=null, draft=[], tab='team', search='', filter='all', saving=false, selectedBoost=null, selectedSwapId=null, swapNotice='';
 const byId=id=>data?.players?.find(p=>Number(p.id)===Number(id));
 const pos=p=>p?.position==='Вратарь'?'Вратарь':'Полевой';
 // Both saved and edited squads are valued at CURRENT market prices.
@@ -92,6 +92,7 @@ async function refresh(){
    }
    draft=(data.roster||[]).map(x=>({...x,player_id:Number(x.player_id)}));
    selectedBoost=data?.boosts?.active||null;
+   selectedSwapId=null;swapNotice='';
    render();
    if(data.previewMode)$('notice').innerHTML='<div class="message" role="status"><strong>Проверка дизайна.</strong> Состав демонстрационный; изменения сохраняются только в этом браузере. Рабочие аккаунты и база не меняются.</div>';
  }
@@ -140,24 +141,61 @@ function changeCaptain(id,which){
  selected[other]=false;
  render();
 }
+// Two-tap selection on the pitch or in the squad list. No transfer is created:
+// this only rearranges an existing starter with an existing bench player.
 function movePlayer(id){
  if(locked())return;
- const e=draft.find(x=>x.player_id===id);if(!e||e.slot==='goalkeeper')return;
- if(e.slot==='starter'){
-  const substitute=draft.find(x=>x.slot==='bench1')||draft.find(x=>x.slot==='bench2');
-  if(!substitute)return flash('Чтобы поменять игрока основы, нужен запасной.',true);
-  const oldBench=substitute.slot;substitute.slot='starter';e.slot=oldBench;
- }else{
-  const starter=draft.find(x=>x.slot==='starter');
-  if(!starter)return;
-  const oldBench=e.slot;e.slot='starter';starter.slot=oldBench;
+ const chosenId=Number(id);
+ const clicked=draft.find(e=>Number(e.player_id)===chosenId);
+ if(!clicked||clicked.slot==='goalkeeper')return;
+ if(clicked.slot==='starter'){
+   selectedSwapId=selectedSwapId===chosenId?null:chosenId;
+   swapNotice='';
+   render();
+   return;
  }
- assignFlags();render();
+ if(clicked.slot!=='bench1'&&clicked.slot!=='bench2')return;
+ if(selectedSwapId==null){
+   swapNotice='Сначала выбери игрока в основе, затем нажми на запасного.';
+   render();
+   return;
+ }
+ const starterIndex=draft.findIndex(e=>Number(e.player_id)===selectedSwapId&&e.slot==='starter');
+ const benchIndex=draft.findIndex(e=>Number(e.player_id)===chosenId&&(e.slot==='bench1'||e.slot==='bench2'));
+ if(starterIndex<0||benchIndex<0){
+   selectedSwapId=null;
+   swapNotice='Не удалось выполнить замену. Попробуй выбрать игроков заново.';
+   render();
+   return;
+ }
+ const outgoing=draft[starterIndex],incoming=draft[benchIndex];
+ const benchSlot=incoming.slot;
+ // Keep the exact position on the pitch by swapping array positions as well
+ // as the slot values (display slots are derived from roster order).
+ const wasCaptain=!!outgoing.is_captain,wasVice=!!outgoing.is_vice_captain;
+ outgoing.slot=benchSlot;outgoing.is_captain=false;outgoing.is_vice_captain=false;
+ incoming.slot='starter';incoming.is_captain=wasCaptain;incoming.is_vice_captain=wasVice;
+ draft[starterIndex]=incoming;
+ draft[benchIndex]=outgoing;
+ selectedSwapId=null;
+ assignFlags();
+ swapNotice='Игроки поменялись местами. Не забудь нажать «Сохранить состав».';
+ render();
+}
+function swapGuideHtml(){
+ if(locked())return '';
+ const selected=draft.find(e=>Number(e.player_id)===selectedSwapId&&e.slot==='starter');
+ const caption=selected
+  ?'Выбран '+esc(byId(selected.player_id)?.name||'игрок основы')+'. Нажми на футболиста в запасе, чтобы поменять их местами. Повторное нажатие отменит выбор.'
+  :swapNotice||'Замена на поле: нажми на футболиста основы, затем на одного из двух запасных.';
+ return '<div class="swap-guide'+(selected?' swap-guide-active':'')+'" role="status" aria-live="polite">'+
+   (selected?'<span class="swap-indicator" aria-hidden="true">⇄</span>':'')+
+   '<span>'+caption+'</span></div>';
 }
 function swapBench(){
  if(locked())return;
  const a=draft.find(x=>x.slot==='bench1'),b=draft.find(x=>x.slot==='bench2');
- if(a&&b){a.slot='bench2';b.slot='bench1';render();}
+ if(a&&b){a.slot='bench2';b.slot='bench1';selectedSwapId=null;swapNotice='Порядок запасных изменён. Не забудь сохранить состав.';render();}
 }
 async function saveTeam(){
  if(!data?.user)return openLogin();
@@ -165,6 +203,7 @@ async function saveTeam(){
  if(draft.length!==8)return flash('Сначала набери 8 игроков.',true);
  if(!draft.some(x=>x.is_captain)||!draft.some(x=>x.is_vice_captain))return flash('Выбери капитана и вице-капитана.',true);
  if(used()>budgetLimit+0.001)return flash('Бюджет превышен на '+cash(used()-budgetLimit)+'. Замени футболистов, чтобы уложиться в 50.0.',true);
+ selectedSwapId=null;swapNotice='';
  if(data?.previewMode){
    data.roster=draft.map(x=>({...x}));
    sessionStorage.setItem('sf_design_demo_squad',JSON.stringify(data.roster));
@@ -216,14 +255,14 @@ function teamHtml(){
   const starter=e.slot==='goalkeeper'||e.slot==='starter';
   return '<div class="entry"><div class="entry-info"><strong>'+esc(p.name)+'</strong><small>'+esc(pos(p))+' · '+slotTitle(e)+' · '+cash(p.price)+'</small></div>'+
    '<div class="entry-actions">'+scoreBadge(latestEntry(p.id))+(starter?'<button class="small-btn '+(e.is_captain?'marked':'')+'" data-action="cap" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>К</button><button class="small-btn '+(e.is_vice_captain?'marked':'')+'" data-action="vice" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>ВК</button>':'')+
-   (p.position!=='Вратарь'?'<button class="small-btn" data-action="move" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>'+(starter?'В запас':'В основу')+'</button>':'')+
+   (p.position!=='Вратарь'?'<button class="small-btn'+(selectedSwapId===p.id?' marked':'')+'" data-action="move" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>'+(starter?(selectedSwapId===p.id?'Отменить выбор':'Выбрать'):selectedSwapId!=null?'Поменять':'Выбрать основу')+'</button>':'')+
    '<button class="small-btn" data-action="remove" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>×</button></div></div>';
  }).join('');
  return budgetAlertHtml()+myLastTourHtml()+boostPanelHtml()+(data.round?.unlimited_transfers&&!locked()?'<div class="message">Тур №'+data.round.round_number+': <strong>неограниченные бесплатные трансферы</strong> до 18 ноября, 20:30 по Риге. Можно полностью пересобрать восьмёрку, менять капитана и запасных. Очки прошлого тура сохраняются выше.</div>':'')+'<div class="columns"><section class="panel"><h2>Твой состав · тур №'+data.round?.round_number+'</h2><p class="muted">На поле — 5 полевых по схеме 1–2–2 и вратарь</p><div class="pitch"><div class="formation">'+
   '<div class="slot front">'+chip('starter:0','Нападение')+'</div>'+
   ['mid-left','mid-right','back-left','back-right'].map((c,i)=>'<div class="slot '+c+'">'+chip('starter:'+(i+1),'Основа')+'</div>').join('')+
   '<div class="slot keeper">'+chip('goalkeeper','Вратарь')+'</div></div></div>'+
-  '<div class="bench">'+chip('bench1','Запас 1')+chip('bench2','Запас 2')+'</div>'+
+  '<div class="bench">'+chip('bench1','Запас 1')+chip('bench2','Запас 2')+'</div>'+swapGuideHtml()+
   '<div class="actions"><button class="outline" data-action="swap" '+(locked()?'disabled':'')+'>Порядок запаса ⇄</button><button class="primary" data-action="save" '+(locked()?'disabled':'')+'>Сохранить состав</button></div>'+
   (locked()?'<div class="warning">Тур закрыт: изменения состава недоступны.</div>':'<p class="muted">Изменения становятся действительными только после нажатия «Сохранить состав». '+(data.round?.unlimited_transfers?'Лимита трансферов в этом туре нет.':'')+'</p>')+
   '</section><section class="panel"><h2>Управление составом</h2><p class="muted">К — капитан, ВК — вице-капитан. Перестановки между основой и запасом бесплатны.</p>'+
@@ -242,8 +281,18 @@ function chip(slot,label){
  const marker=e.is_captain?'<span class="chip-caption">К</span>':e.is_vice_captain?'<span class="chip-caption vice">В</span>':'';
  const individual=latestEntry(e.player_id);
  const points=individual?'<span class="chip-score'+(unusedBench(individual)?' chip-score-unused':'')+'">'+scored(displayedPlayerPoints(individual))+(unusedBench(individual)?' · не вышел':'')+'</span>':'';
- return '<div class="chip">'+marker+'<img class="sf-kit" src="assets/sreda-kit-'+kit+'.svg" width="58" height="58" alt="" draggable="false">'+
-  '<span class="chip-name">'+esc(p?.name||'?')+'</span><small>'+cash(p?.price)+' млн</small>'+points+'</div>';
+ const canSwap=!locked()&&p?.position!=='Вратарь';
+ const selected=canSwap&&e.slot==='starter'&&selectedSwapId===Number(e.player_id);
+ const target=canSwap&&(e.slot==='bench1'||e.slot==='bench2')&&selectedSwapId!=null;
+ const tag=canSwap?'button':'div';
+ const labelText=canSwap
+  ?(selected?'Отменить выбор игрока ':target?'Поменять выбранного игрока на ':'Выбрать для замены ')+esc(p.name)
+  :esc(p?.name||'Футболист');
+ return '<'+tag+' class="chip'+(canSwap?' chip-clickable':'')+(selected?' chip-swap-selected':'')+(target?' chip-swap-target':'')+'"'+
+  (canSwap?' type="button" data-action="move" data-id="'+p.id+'" aria-label="'+labelText+'" aria-pressed="'+selected+'"':'')+'>'+
+  marker+'<img class="sf-kit" src="assets/sreda-kit-'+kit+'.svg" width="58" height="58" alt="" draggable="false">'+
+  '<span class="chip-name">'+esc(p?.name||'?')+'</span><small>'+cash(p?.price)+' млн</small>'+points+
+  '</'+tag+'>';
 }
 function marketHtml(){
  const filtered=(data?.players||[]).filter(p=>p.active!==false&&p.name.toLowerCase().includes(search.toLowerCase())&&(filter==='all'||(filter==='gk')===(p.position==='Вратарь')));
