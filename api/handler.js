@@ -3,6 +3,17 @@ const {createClient}=require('@supabase/supabase-js');
 const {createHash,randomBytes,scryptSync,timingSafeEqual}=require('node:crypto');
 const scoring=require('./results');
 const season=require('./season');
+async function boostHistory(client,managerId){
+ if(!managerId)return [];
+ const {data,error}=await client.from('manager_boosts')
+   .select('round_id,season_code,boost').eq('manager_id',managerId);
+ if(error){
+   // Staging migrations intentionally are NOT applied to production yet.
+   if(['42P01','PGRST205'].includes(error.code))return [];
+   throw error;
+ }
+ return data||[];
+}
 
 const SESSION_COOKIE='sf_session';
 const sha=x=>createHash('sha256').update(x).digest('hex');
@@ -72,6 +83,7 @@ async function state(client,user){
   ]);
   for(const q of [p,r,m,s])if(q.error)throw q.error;
   const round=r.data?.[0]||null,locked=!round||Date.parse(round.deadline_at)<=Date.now();
+  const boostRows=user?await boostHistory(client,user.id):[];
   const seasonData=await season.publishedData(client,r.data||[],p.data||[],(m.data||[]).length,round);
   let roster=[],transfers=0;
   if(user&&round){
@@ -101,12 +113,16 @@ async function state(client,user){
       round_number:last.round_number,
       round_id:last.id,
       points:result?Number(result.points):0,
-      roster:season.scoredRoster(entries,seasonData.lastStats,p.data||[],last.round_number)
+      roster:season.scoredRoster(entries,seasonData.lastStats,p.data||[],last.round_number,boostRows.find(b=>String(b.round_id)===String(last.id))?.boost||null)
     };
   }
   return {
     players:p.data||[],round,locked,user,roster,transfers,leaderboard,
     lastRound:seasonData.lastRound,
+    boosts:{
+      active:boostRows.find(b=>String(b.round_id)===String(round?.id))?.boost||null,
+      used:boostRows.map(b=>b.boost)
+    },
     seasonPlayers:seasonData.seasonPlayers,
     myLastTour
   };
@@ -168,7 +184,8 @@ module.exports=async function handler(req,res){
         ]);
         for(const query of [statResult,playerResult,pointResult])if(query.error)throw query.error;
         return send(res,200,{
-          roster:season.scoredRoster(roster||[],statResult.data||[],playerResult.data||[],r.round_number),
+          roster:season.scoredRoster(roster||[],statResult.data||[],playerResult.data||[],r.round_number,
+            (await boostHistory(client,id)).find(b=>String(b.round_id)===String(roundID))?.boost||null),
           points:pointResult.data?Number(pointResult.data.points):0,
           published:true
         });
@@ -230,7 +247,10 @@ module.exports=async function handler(req,res){
     if(body.action==='save'){
       if(!Array.isArray(body.roster)||body.roster.length!==8)
         return send(res,400,{error:'Состав должен состоять из 8 игроков.'});
-      const {data,error:e}=await client.rpc('save_fantasy_roster',{p_manager:user.id,p_entries:body.roster});
+      const boost=body.boost==null?null:String(body.boost);
+       const {data,error:e}=await client.rpc('sf_save_boosted_roster',{
+         p_manager:user.id,p_entries:body.roster,p_boost:boost
+       });
       if(e)return send(res,400,{error:e.message});
       return send(res,200,{ok:true,transfers:e?null:data});
     }
