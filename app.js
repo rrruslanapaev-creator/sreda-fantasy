@@ -2,7 +2,7 @@
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const cash=n=>Number(n||0).toFixed(1);
-let data=null, draft=[], tab='team', search='', filter='all', saving=false, selectedBoost=null, selectedSwapId=null, swapNotice='';
+let data=null, draft=[], tab='team', search='', filter='all', saving=false, selectedSwapId=null, swapNotice='';
 const byId=id=>data?.players?.find(p=>Number(p.id)===Number(id));
 const pos=p=>p?.position==='Вратарь'?'Вратарь':'Полевой';
 // Both saved and edited squads are valued at CURRENT market prices.
@@ -91,7 +91,6 @@ async function refresh(){
      }catch{/* Corrupt demo state is ignored. */}
    }
    draft=(data.roster||[]).map(x=>({...x,player_id:Number(x.player_id)}));
-   selectedBoost=data?.boosts?.active||null;
    selectedSwapId=null;swapNotice='';
    render();
    if(data.previewMode)$('notice').innerHTML='<div class="message" role="status"><strong>Проверка дизайна.</strong> Состав демонстрационный; изменения сохраняются только в этом браузере. Рабочие аккаунты и база не меняются.</div>';
@@ -211,7 +210,7 @@ async function saveTeam(){
    return flash('Демо-состав сохранён только в этом браузере. На основном сайте ничего не изменилось.');
  }
  if(saving)return;saving=true;
- try{const free=Boolean(data?.round?.unlimited_transfers);const r=await api('save',{roster:draft,boost:selectedBoost});await refresh();flash(free?'Новый состав сохранён. В этом туре количество трансферов не ограничено.':'Состав сохранён на сервере. Использовано трансферов: '+r.transfers+' из 2.');}
+ try{const free=Boolean(data?.round?.unlimited_transfers);const r=await api('save',{roster:draft});await refresh();flash(free?'Новый состав сохранён. В этом туре количество трансферов не ограничено.':'Состав сохранён на сервере. Использовано трансферов: '+r.transfers+' из 2.');}
  catch(e){flash(e.message,true);}finally{saving=false;}
 }
 // Only the four visual boost states are previewed; no bonus is charged or activated.
@@ -222,32 +221,14 @@ const futureBoosts=[
  {id:'bench_boost',name:'Бенч-буст',symbol:'＋',desc:'Очки двух запасных'}
 ];
 function boostPanelHtml(){
- const used=new Set(data?.boosts?.used||[]);
- const active=data?.boosts?.active||null;
- const selected=selectedBoost||active;
- return '<section class="boost-panel"><div class="boost-title"><h3>Бонусы сезона</h3><small>По одному разу за сезон</small></div>'+
-  '<div class="boost-grid">'+futureBoosts.map(b=>{
-   const chosen=selected===b.id,previous=used.has(b.id)&&active!==b.id;
-   const disabled=Boolean(data?.previewMode||locked()||previous||(active&&active!==b.id));
-   const status=previous?'Уже использован':chosen?(active?'Активирован':'Будет применён при сохранении'):data?.previewMode?'Предпросмотр':'Выбрать';
-   return '<button class="boost-card'+(chosen?' boost-card-active':'')+'" type="button" data-action="boost" data-boost="'+b.id+'"'+
-    (disabled?' disabled':'')+' aria-pressed="'+chosen+'" title="'+(disabled?'Недоступно в проверочной версии либо уже использовано':'Активировать при сохранении состава')+'">'+
-    '<span class="boost-glyph" aria-hidden="true">'+esc(b.symbol)+'</span><b>'+esc(b.name)+'</b>'+
-    '<span>'+esc(status)+'</span></button>';
-  }).join('')+'</div>'+
-  '<p class="boost-preview-note">'+(data?.previewMode?
-    'Проверочная версия: бонусы показаны для оценки дизайна, но не расходуются и не влияют на результаты.':
-    'Можно активировать один бонус за тур. Он будет зафиксирован вместе с сохранением состава.')+'</p></section>';
-}
-function selectBoost(id){
- if(data?.previewMode)return flash('Это только проверочный дизайн. Бонусы пока не подключены к отдельной тестовой базе.',true);
- if(locked())return flash('Бонусы нельзя активировать после дедлайна.',true);
- if(!futureBoosts.some(b=>b.id===id))return;
- const active=data?.boosts?.active;
- if(active){return flash('На текущий тур уже зафиксирован бонус '+active+'.',true);}
- if((data?.boosts?.used||[]).includes(id))return flash('Этот бонус уже был использован.',true);
- selectedBoost=selectedBoost===id?null:id;
- render();
+ return '<section class="boost-panel"><div class="boost-title"><h3>Бонусы сезона</h3>'+
+  '<small>Откроются со следующего тура</small></div>'+
+  '<div class="boost-grid">'+futureBoosts.map(b=>
+   '<button class="boost-card" type="button" disabled aria-disabled="true"'+
+    ' title="Бусты пока недоступны; включим их отдельно со следующего тура">'+
+    '<span class="boost-glyph" aria-hidden="true">'+esc(b.symbol)+'</span>'+
+    '<b>'+esc(b.name)+'</b><span>Пока недоступен</span></button>').join('')+
+  '</div><p class="boost-preview-note">В этом туре бусты не работают и не влияют на очки. Активируем отдельно со следующего тура.</p></section>';
 }
 function teamHtml(){
  if(!data?.user)return '<section class="panel"><h2>Собери свою команду</h2><p class="subtle">Войди по имени и PIN или зарегистрируй нового менеджера. Состав будет храниться в общей базе.</p><button class="primary" data-action="login">Войти / создать менеджера</button></section>';
@@ -361,7 +342,7 @@ function playerPointsHtml(){
 }
 function rulesHtml(){
  const scoring=[['Участие','+1'],['Гол полевого','+5'],['Гол вратаря','+10'],['Голевая передача','+3'],['Сухой 10-минутный матч полевого','+1'],['Сухой 10-минутный матч вратаря','+3'],['Отбитый пенальти','+5'],['Незабитый пенальти','−2'],['Автогол','−2'],['Чемпион вечера','+2'],['Каждые полные −3 мяча отрицательной разницы команды за вечер (с тура №2)','−1 каждому футболисту'],['Каждые 2 пропущенных гола (только тур №1)','−1 каждому футболисту']];
- return '<section class="panel rules"><h2>Правила Sreda Fantasy</h2><ul><li>Бюджет — <strong>50.0</strong>. В составе 1 вратарь, 5 полевых в основе и 2 полевых в запасе.</li><li>Обычно доступно <strong>2 трансфера за тур</strong>, они не переносятся. В турах с режимом свободной пересборки число трансферов не ограничено.</li><li>Дедлайн — <strong>среда, 20:30 Europe/Riga</strong>. После него изменения заблокированы.</li><li>При отсутствии полевого игрока основы вступает присутствующий запасной, по приоритету 1 → 2. Вратарь без замены.</li><li>Капитан получает ×2, если присутствовал. Если нет — ×2 получает присутствующий вице-капитан.</li></ul><h2>Очки за игру</h2><table class="league">'+scoring.map(s=>'<tr><td>'+s[0]+'</td><td>'+s[1]+'</td></tr>').join('')+'</table><h2>Бонусы сезона</h2><p class="muted">Один бонус за тур. Каждый из четырёх можно применить только один раз за сезон.</p><ul><li><strong>Бенч-буст:</strong> оба присутствовавших запасных приносят свои очки, даже если не требовалась автозамена.</li><li><strong>Тройной капитан:</strong> очки сыгравшего капитана ×3. Если капитан отсутствовал, ×3 получает сыгравший вице-капитан.</li><li><strong>Фри-хит:</strong> неограниченные трансферы на один тур. В следующем туре возвращается прежняя восьмёрка, позиции и капитаны.</li><li><strong>Вайлдкард:</strong> неограниченные трансферы с сохранением нового состава на следующие туры.</li></ul><p class="muted"><strong>Начиная с тура №2 (18 ноября 2026):</strong> штраф зависит от итоговой разницы мячей команды (забитые − пропущенные за весь вечер), а не от числа пропущенных голов. Разница −1 или −2 не штрафуется, −3…−5 даёт −1, −6…−8 даёт −2 и так далее. При нулевой или положительной разнице штрафа нет и дополнительный бонус не начисляется. Штраф применяется к каждому участвовавшему футболисту, в том числе вратарю; капитанские очки удваиваются. <strong>Результаты тура №1 не пересчитываются.</strong></p></section>';
+ return '<section class="panel rules"><h2>Правила Sreda Fantasy</h2><ul><li>Бюджет — <strong>50.0</strong>. В составе 1 вратарь, 5 полевых в основе и 2 полевых в запасе.</li><li>Обычно доступно <strong>2 трансфера за тур</strong>, они не переносятся. В турах с режимом свободной пересборки число трансферов не ограничено.</li><li>Дедлайн — <strong>среда, 20:30 Europe/Riga</strong>. После него изменения заблокированы.</li><li>При отсутствии полевого игрока основы вступает присутствующий запасной, по приоритету 1 → 2. Вратарь без замены.</li><li>Капитан получает ×2, если присутствовал. Если нет — ×2 получает присутствующий вице-капитан.</li></ul><h2>Очки за игру</h2><table class="league">'+scoring.map(s=>'<tr><td>'+s[0]+'</td><td>'+s[1]+'</td></tr>').join('')+'</table><h2>Бонусы сезона — пока недоступны</h2><p class="muted"><strong>В этом туре бусты не активируются и не влияют на результат.</strong> Планируется включить их отдельно со следующего тура. После включения можно будет использовать один бонус за тур, каждый вид — один раз за сезон.</p><ul><li><strong>Бенч-буст:</strong> оба присутствовавших запасных приносят свои очки, даже если не требовалась автозамена.</li><li><strong>Тройной капитан:</strong> очки сыгравшего капитана ×3. Если капитан отсутствовал, ×3 получает сыгравший вице-капитан.</li><li><strong>Фри-хит:</strong> неограниченные трансферы на один тур. В следующем туре возвращается прежняя восьмёрка, позиции и капитаны.</li><li><strong>Вайлдкард:</strong> неограниченные трансферы с сохранением нового состава на следующие туры.</li></ul><p class="muted"><strong>Начиная с тура №2 (18 ноября 2026):</strong> штраф зависит от итоговой разницы мячей команды (забитые − пропущенные за весь вечер), а не от числа пропущенных голов. Разница −1 или −2 не штрафуется, −3…−5 даёт −1, −6…−8 даёт −2 и так далее. При нулевой или положительной разнице штрафа нет и дополнительный бонус не начисляется. Штраф применяется к каждому участвовавшему футболисту, в том числе вратарю; капитанские очки удваиваются. <strong>Результаты тура №1 не пересчитываются.</strong></p></section>';
 }
 function render(){
  if(!data)return;
@@ -454,7 +435,7 @@ document.addEventListener('click',event=>{
  else if(action==='add')addPlayer(id);else if(action==='remove')removePlayer(id);
  else if(action==='cap'||action==='vice')changeCaptain(id,action);
  else if(action==='move')movePlayer(id);else if(action==='swap')swapBench();
- else if(action==='save')saveTeam();else if(action==='boost')selectBoost(button.dataset.boost);else if(action==='view')openManager(button.dataset.id);
+ else if(action==='save')saveTeam();else if(action==='view')openManager(button.dataset.id);
 });
 document.addEventListener('input',event=>{
  if(event.target.id==='player-points-search'){
