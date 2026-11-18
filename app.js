@@ -324,16 +324,20 @@ function leagueHtml(){
   people.map((m,i)=>'<tr><td>'+(i+1)+'</td><td><button class="link" data-action="view" data-id="'+esc(m.id)+'">'+esc(m.username)+'</button></td><td>'+scored(m.points)+'</td></tr>').join('')+
   '</tbody></table>'+(people.length?'':'<p class="muted">Менеджеров пока нет.</p>')+'</section>'+popularPlayersHtml();
 }
+const displayAveragePoints=value=>value===null||value===undefined?'—':
+ Number(value).toLocaleString('ru-RU',{minimumFractionDigits:1,maximumFractionDigits:1});
 function playerPointsHtml(){
  const players=data?.seasonPlayers||[];
  const count=data?.leaderboard?.length||0;
  return '<section class="panel"><h2>Очки футболистов</h2>'+
-  '<p class="subtle">Очки за все опубликованные туры сезона. Владение — сколько зарегистрированных менеджеров включили футболиста в свою команду на текущий тур.</p>'+
-  '<p class="muted">Менеджеров в лиге: '+count+'. Процент рассчитывается от всех '+count+' аккаунтов, даже если состав ещё не собран.</p>'+
+  '<p class="subtle">Всего очков — сумма за опубликованные туры сезона. Среднее за тур — эта сумма, делённая на количество опубликованных туров, включая туры без участия футболиста. До первого опубликованного тура среднее не рассчитывается.</p>'+
+  '<p class="muted">Владение — доля зарегистрированных менеджеров, включивших футболиста в текущий состав. Всего менеджеров: '+count+'.</p>'+
   '<input id="player-points-search" class="search" type="search" placeholder="Найти футболиста" aria-label="Поиск футболиста">'+
-  '<div class="table-scroll"><table class="league player-points-table"><thead><tr><th>Футболист</th><th>Очки за сезон</th><th>Владение</th></tr></thead><tbody>'+
+  '<div class="table-scroll"><table class="league player-points-table"><thead>'+
+  '<tr><th>Футболист</th><th>Всего очков</th><th>Среднее за тур</th><th>Владение</th></tr></thead><tbody>'+
   players.map(p=>'<tr data-player-name="'+esc(p.name.toLocaleLowerCase('ru'))+'"><td><strong>'+esc(p.name)+'</strong></td>'+
    '<td class="numeric">'+scored(p.season_points)+'</td>'+
+   '<td class="numeric">'+displayAveragePoints(p.average_points_per_round)+'</td>'+
    '<td class="numeric">'+Number(p.ownership_percent).toLocaleString('ru-RU',{minimumFractionDigits:1,maximumFractionDigits:1})+
    '% <small>('+p.owners+'/'+count+')</small></td></tr>').join('')+
   '</tbody></table></div>'+
