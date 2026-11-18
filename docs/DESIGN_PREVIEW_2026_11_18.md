@@ -1,32 +1,32 @@
-# Preview: Sreda Fantasy redesign (Design-Only, 18 November 2026)
+# Новый дизайн Sreda Fantasy — проверочная версия (18 ноября 2026)
 
-This branch is an integration prototype. It must **not be merged or deployed as production** without explicit approval of the owner.
+Эта ветка содержит **только дизайн и обычные функции действующего сайта**. Объединение с `main` и публикация в production разрешены **только после отдельного подтверждения владельца**.
 
-## Source and scope
-- Source: `Sreda-Fantasy-Design-Only-2026-11-18.zip` (user-provided visual handoff).
-- Existing `/api/handler`, manager PIN auth, Supabase user records, player records, rosters, scores, transfer limits and rules remain the source of truth.
-- New purple/white/lime visual layer in `redesign.css`, responsive header and mobile bottom nav; sample shirt icons in `assets/`.
-- Four boost controls and revised Rules panel integrated into frontend, using a proposed migration `supabase/009_season_boosts.sql`.
+## Источник дизайна
+- Архив: `Sreda-Fantasy-Design-Only-2026-11-18.zip` от пользователя.
+- Дизайн: светлые карточки, фиолетовая шапка, зелёное поле и футболки игроков, мобильное нижнее меню, таблицы лиги и владения футболистами, удобные перестановки основы и запаса.
+- Сохраняются существующие `/api/handler`, менеджерская регистрация/вход по имени и PIN, Supabase, цены, бюджеты, составы, история, админка и формулы подсчёта очков.
 
-## Non-production safety
-Vercel Preview deployments have **all POST actions blocked server-side**. GET returns a marked demonstration lineup for visual testing. Local edits to that lineup are stored in the visitor's `sessionStorage` only. They do not reach production Supabase. Buttons for boosts stay disabled on preview. Account login is likewise disabled to prevent session writes into the live database.
+## Решение по бустам: **не активировать до следующего тура**
+- Четыре буста видны только как **отключённые карточки** (`<button disabled>`).
+- Нельзя нажать на них ни в предпросмотре, ни после будущей публикации дизайна в production.
+- Клиент не посылает параметры бустов, сервер отвергает попытку передать `boost` в запросе сохранения.
+- Составы сохраняются обычной действующей SQL-функцией `save_fantasy_roster`; очки рассчитываются по старым правилам без бустов.
+- Новая таблица бустов и миграция **не требуются** для публикации дизайна.
+- Вся разработанная механика бустов отложена в отдельную ветку `feature/boosts-after-current-round`, включая SQL `009` и регрессионные тесты. Она **не** объединена с рабочей базой и не включается автоматически. Отдельно тестировать и активировать не раньше следующего тура.
 
-The boost database migration has **not** been applied to the working Supabase project. It is exercised only in GitHub's disposable PostgreSQL CI. On production, deploy changes to the database **before** deploying this feature's API and UI, then activate it by explicit owner approval. Do not make the production rollout by merging this PR directly.
+## Разграничение данных в preview
+На адресах Vercel Preview **все POST-запросы блокируются сервером**. Для визуальной проверки показывается демонстрационный состав; его редактирование сохраняется в `sessionStorage` только в браузере посетителя. Реальные PIN, сохранение в Supabase и публикация результатов не доступны в preview специально.
 
-## Boost semantics (proposed)
-- `bench_boost`: both present outfield substitutes count, including if the starting five all played.
-- `triple_captain`: captain's points ×3, vice-captain inherits ×3 if captain is absent.
-- `free_hit`: any budget-valid roster for one round; base team stored in `manager_boosts.base_roster` and restored through `sf_rollover_rosters(source_round,target_round)` when next round is created.
-- `wildcard`: unlimited transfers, new valid squad persists to the next round.
-- One boost per round; each named boost can be used only once per season. Boost activation and roster validation run atomically.
-- Important: operators must use `sf_rollover_rosters` to create subsequent rounds' rosters. Manual `INSERT ... SELECT` would ignore Free Hit restoration.
+При публикации на основном домене эта защита preview не действует. Сервер использует существующую менеджерскую аутентификацию и обычные SQL функции для сохранения составов. Перед публикацией требуется проверить это поведение отдельно, без использования реальной базы как тестового стенда.
 
-## Before owner approval
-1. Review Vercel preview layout on desktop/mobile.
-2. Run GitHub CI with Node and PostgreSQL regression tests.
-3. Obtain isolated Supabase staging database for live login/roster/boost tests. A Supabase dev branch may incur compute cost; do not create without cost approval.
-4. Verify budget, saved rosters, old scores, cap/vice, bench substitution, Free Hit restoration, single use, API write protection on preview.
-5. Only then plan the owner-authorized production migration and rollout.
+## Проверка перед публикацией
+1. Проверить Vercel Preview на телефоне и компьютере: все разделы, состав на поле, рынок, бюджет, капитана и вице-капитана, переключение основы и запаса, процент владения, адаптивную навигацию.
+2. Убедиться, что все четыре карточки бустов не нажимаются, а сервер отвергает параметр `boost`.
+3. Пройти тесты GitHub (JS и PostgreSQL для существующей механики подсчёта).
+4. Проверить регистрацию/вход, реальное сохранение составов, лимиты, результаты и админку в изолированной тестовой среде. Supabase branch может иметь стоимость; не создавать платный ресурс без согласия.
+5. Убедиться в актуальном резервном копировании перед выпуском и получить **отдельное подтверждение владельца** на production.
 
-## Rollback
-Backup GitHub branch: `backup/pre-redesign-2026-11-18`. Backup of ten production public tables: schema `sreda_ui_backup_20261118` (created and checksummed before this work).
+## Резервные копии до начала работ
+- GitHub: `backup/pre-redesign-2026-11-18`.
+- Supabase: закрытая схема `sreda_ui_backup_20261118` с копиями десяти таблиц и контрольными суммами.
