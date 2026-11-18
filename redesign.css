@@ -172,3 +172,20 @@ body.theme-fpl .boost-card-active .boost-glyph{background:var(--sf-lime)}
 body.theme-fpl .boost-card:disabled{cursor:not-allowed;opacity:.65}
 body.theme-fpl .boost-card-active:disabled{opacity:.95}
 @media(max-width:600px){.mobile-nav.has-admin{grid-template-columns:repeat(6,minmax(0,1fr))}.mobile-nav.has-admin button{font-size:8px}}
+
+/* Two-tap pitch substitutions. Highlights persist after the first tap. */
+body.theme-fpl .chip-clickable{cursor:pointer;-webkit-tap-highlight-color:transparent;appearance:none;touch-action:manipulation;transition:transform .15s ease,filter .15s ease,box-shadow .15s ease;outline:2px solid transparent;outline-offset:3px}
+body.theme-fpl .chip-clickable:hover{transform:translateY(-3px);filter:brightness(1.05)}
+body.theme-fpl .chip-clickable:focus-visible{outline:3px solid #d2ff70;outline-offset:3px}
+body.theme-fpl .chip-swap-selected,body.theme-fpl .chip-swap-selected:hover{outline:3px solid #d9ff75;outline-offset:2px;border-radius:9px;box-shadow:0 0 0 7px #32115199,0 0 22px #d9ff7599;transform:translateY(-4px)}
+body.theme-fpl .chip-swap-selected .chip-name{background:#d9ff75;color:#28113f}
+body.theme-fpl .chip-swap-target{outline:2px dashed #5cf6ed;outline-offset:3px;border-radius:9px;box-shadow:0 0 14px #65e9e955}
+body.theme-fpl .bench .chip-swap-target .chip-name{background:#bdfffb;color:#28113f}
+body.theme-fpl .swap-guide{display:flex;align-items:center;justify-content:center;gap:10px;min-height:40px;margin:10px 0 5px;padding:10px 13px;border:1px solid #e2d9eb;border-radius:10px;background:#f8f5fb;color:#695376;font-size:12px;font-weight:650;line-height:1.4}
+body.theme-fpl .swap-guide-active{background:#eaffc8;color:#381f4b;border-color:#b0d76c;font-weight:750}
+body.theme-fpl .swap-indicator{display:grid;place-items:center;flex:none;border-radius:50%;width:25px;height:25px;background:#34134a;color:#d8ff83;font-size:16px;font-weight:900}
+@media(max-width:600px){
+ body.theme-fpl .chip-clickable{touch-action:manipulation}
+ body.theme-fpl .chip-swap-selected{outline-width:3px;box-shadow:0 0 0 4px #3b175b99,0 0 14px #e6ff9f}
+ body.theme-fpl .swap-guide{margin:8px -3px 3px;padding:8px;font-size:11px;min-height:44px}
+}
