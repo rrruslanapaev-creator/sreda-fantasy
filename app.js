@@ -293,10 +293,13 @@ function marketRows(players){return players.map(p=>{
   '<button class="small-btn" data-action="'+(selected?'remove':'add')+'" data-id="'+p.id+'" '+((selected?!locked():roomFor(p))?'':'disabled')+'>'+(selected?'Убрать':'Добавить')+'</button></div>';
 }).join('')||'<p class="muted">Игроки не найдены.</p>';}
 // Source of truth: backend aggregates current-round ownership over ALL managers.
+// The denominator is the number of managers with a complete saved roster
+// for the current round, not the number of registered accounts.
+const ownershipManagerCount=()=>Number(data?.ownershipManagerCount??data?.leaderboard?.length??0);
 function ownershipDetails(playerID){
  const info=(data?.seasonPlayers||[]).find(p=>Number(p.player_id)===Number(playerID));
  if(!info)return null;
- const leagueSize=data?.leaderboard?.length||0;
+ const leagueSize=ownershipManagerCount();
  return {percent:Number(info.ownership_percent).toLocaleString('ru-RU',{
    minimumFractionDigits:1,maximumFractionDigits:1
  })+'%',owners:Number(info.owners)||0,leagueSize};
@@ -307,19 +310,20 @@ function ownershipText(playerID){
 }
 function popularPlayersHtml(){
  const total=(data?.seasonPlayers||[]).length;
+ const count=ownershipManagerCount();
  const popular=(data?.seasonPlayers||[]).slice()
   .sort((a,b)=>Number(b.ownership_percent)-Number(a.ownership_percent)||
     Number(b.owners)-Number(a.owners)||a.name.localeCompare(b.name,'ru'))
   .slice(0,10);
  if(!popular.length)return '';
  return '<section class="panel league-ownership"><h2>Самые популярные футболисты</h2>'+
-  '<p class="muted">Процент владения от всех зарегистрированных менеджеров лиги. Показаны десять самых популярных футболистов.</p>'+
+  '<p class="muted">Владение — доля менеджеров с полным составом на текущий тур. Показаны десять самых популярных футболистов.</p>'+
   '<div class="table-scroll"><table class="league player-points-table"><thead>'+
   '<tr><th>Футболист</th><th>Очки за сезон</th><th>Владение</th></tr></thead><tbody>'+
   popular.map(p=>'<tr><td><strong>'+esc(p.name)+'</strong></td>'+
    '<td class="numeric">'+scored(p.season_points)+'</td>'+
    '<td class="numeric"><strong>'+ownershipDetails(p.player_id).percent+'</strong>'+
-   ' <small>('+p.owners+'/'+(data?.leaderboard?.length||0)+')</small></td></tr>').join('')+
+   ' <small>('+p.owners+'/'+count+')</small></td></tr>').join('')+
   '</tbody></table></div>'+
   '<p class="muted">Всего футболистов: '+total+'. <button class="link" data-tab="points">Посмотреть владение всеми футболистами</button></p></section>';
 }
@@ -334,10 +338,10 @@ const displayAveragePoints=value=>value===null||value===undefined?'—':
  Number(value).toLocaleString('ru-RU',{minimumFractionDigits:1,maximumFractionDigits:1});
 function playerPointsHtml(){
  const players=data?.seasonPlayers||[];
- const count=data?.leaderboard?.length||0;
+ const count=ownershipManagerCount();
  return '<section class="panel"><h2>Очки футболистов</h2>'+
   '<p class="subtle">Всего очков — сумма за опубликованные туры сезона. Среднее за тур — эта сумма, делённая на количество опубликованных туров, включая туры без участия футболиста. До первого опубликованного тура среднее не рассчитывается.</p>'+
-  '<p class="muted">Владение — доля зарегистрированных менеджеров, включивших футболиста в текущий состав. Всего менеджеров: '+count+'.</p>'+
+  '<p class="muted">Владение — доля менеджеров с полным сохранённым составом на текущий тур. В расчёте участвуют '+count+' менеджеров; аккаунты без команды не учитываются.</p>'+
   '<input id="player-points-search" class="search" type="search" placeholder="Найти футболиста" aria-label="Поиск футболиста">'+
   '<div class="table-scroll"><table class="league player-points-table"><thead>'+
   '<tr><th>Футболист</th><th>Всего очков</th><th>Среднее за тур</th><th>Владение</th></tr></thead><tbody>'+
