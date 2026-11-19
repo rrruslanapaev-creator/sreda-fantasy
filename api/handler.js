@@ -71,7 +71,7 @@ async function state(client,user){
   ]);
   for(const q of [p,r,m,s])if(q.error)throw q.error;
   const round=r.data?.[0]||null,locked=!round||Date.parse(round.deadline_at)<=Date.now();
-  const seasonData=await season.publishedData(client,r.data||[],p.data||[],(m.data||[]).length,round);
+  const seasonData=await season.publishedData(client,r.data||[],p.data||[],round);
   let roster=[],transfers=0;
   if(user&&round){
     const [entries,count]=await Promise.all([
@@ -81,7 +81,8 @@ async function state(client,user){
     if(entries.error||count.error)throw entries.error||count.error;
     roster=entries.data||[];transfers=count.count||0;
   }
-  const leaderboard=(m.data||[]).map(x=>({id:x.id,username:x.username,
+  const leaderboard=(m.data||[]).filter(x=>seasonData.eligibleManagerIds.has(String(x.id)))
+    .map(x=>({id:x.id,username:x.username,
     points:(s.data||[]).filter(v=>v.manager_id===x.id).reduce((sum,v)=>sum+Number(v.points||0),0)}))
     .sort((a,b)=>b.points-a.points||a.username.localeCompare(b.username,'ru'));
   let myLastTour=null;
@@ -107,6 +108,7 @@ async function state(client,user){
     players:p.data||[],round,locked,user,roster,transfers,leaderboard,
     lastRound:seasonData.lastRound,
     seasonPlayers:seasonData.seasonPlayers,
+    ownershipManagerCount:seasonData.ownershipManagerCount,
     myLastTour
   };
 }
