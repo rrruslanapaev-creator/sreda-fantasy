@@ -5,7 +5,7 @@ const path=require('node:path');
 const vm=require('node:vm');
 
 const app=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
-const from=app.indexOf('function ownershipDetails(playerID){');
+const from=app.indexOf('const ownershipManagerCount=()=>');
 const until=app.indexOf('function rulesHtml(){',from);
 if(from<0||until<0)throw Error('Ownership UI functions not found');
 const impl=app.slice(from,until);
@@ -63,11 +63,21 @@ test('Missing average is not misrepresented as zero before any results are publi
  assert.equal(api.displayAveragePoints(0),'0,0');
  assert.equal(api.displayAveragePoints(2.3),'2,3');
 });
-test('Manager roster ownership uses all registered managers as the denominator',()=>{
+test('Manager roster ownership shows eligible-team denominator',()=>{
  const {api}=make();
  assert.equal(api.ownershipText(2),'Владение: 70,0% (7 из 10)');
  assert.equal(api.ownershipText(4),'Владение: 0,0% (0 из 10)');
  assert.equal(api.ownershipText(999),'Владение: —');
+});
+test('Excludes empty accounts from ownership denominator throughout League and Players',()=>{
+ const {data,api}=make();
+ data.ownershipManagerCount=8; // 10 account records, only 8 completed a team
+ data.seasonPlayers[1].ownership_percent=87.5;
+ assert.equal(api.ownershipText(2),'Владение: 87,5% (7 из 8)');
+ assert.match(api.playerPointsHtml(),/7\/8/);
+ assert.match(api.playerPointsHtml(),/87,5%/);
+ assert.match(api.leagueHtml(),/7\/8/);
+ assert.match(api.leagueHtml(),/87,5%/);
 });
 test('Popular-footballer panel does not crash with an empty league',()=>{
  const {data,api}=make(0);
