@@ -18,6 +18,26 @@ function rankRows(rows){
   return rows.slice().sort((a,b)=>b.season_points-a.season_points||
     b.ownership_percent-a.ownership_percent||a.name.localeCompare(b.name,'ru'));
 }
+// A manager qualifies for the league after saving a complete eight-player team
+// in any round. For current ownership percentages, count only complete teams
+// belonging to the latest round, so empty accounts cannot dilute the figure.
+function eligibleRosterManagers(entries,currentRoundId){
+ const byManagerRound=new Map();
+ for(const e of entries){
+   if(e.manager_id==null||e.round_id==null||e.player_id==null)continue;
+   const id=String(e.manager_id),round=String(e.round_id);
+   const key=JSON.stringify([id,round]);
+   if(!byManagerRound.has(key))byManagerRound.set(key,{id,round,players:new Set()});
+   byManagerRound.get(key).players.add(String(e.player_id));
+ }
+ const historicalIds=new Set(),currentIds=new Set();
+ for(const r of byManagerRound.values()){
+   if(r.players.size!==8)continue;
+   historicalIds.add(r.id);
+   if(currentRoundId!=null&&r.round===String(currentRoundId))currentIds.add(r.id);
+ }
+ return {historicalIds,currentIds};
+}
 function buildSeason(players,stats,publishedIds,ownership,managerCount,roundNumbers=new Map()){
   const pubIds=new Set(publishedIds.map(String));
   const rosterCount=new Map();
@@ -78,31 +98,36 @@ function scoredRoster(roster,stats,players,roundNumber=1){
     };
   }).sort((a,b)=>(SLOT_ORDER[a.slot]??99)-(SLOT_ORDER[b.slot]??99));
 }
-async function publishedData(client,rounds,players,managerCount,currentRound){
+async function publishedData(client,rounds,players,currentRound){
   const published=await paged(()=>client.from('round_results_publication')
     .select('round_id').order('round_id',{ascending:true}));
   const publishedIds=published.map(p=>p.round_id);
   const publishedSet=new Set(publishedIds.map(String));
   const lastRound=rounds.find(r=>publishedSet.has(String(r.id)))||null;
 
-  // Current ownership uses all registered managers as denominator.
-  // It is a league-wide aggregate, not another manager's unannounced roster.
-  const [stats,ownership]=await Promise.all([
+  // Use saved rosters rather than registered accounts to identify actual
+  // participants. Only aggregate player ownership (never another manager's
+  // private lineup) is returned to the browser.
+  const [stats,rosterEntries]=await Promise.all([
     publishedIds.length?paged(()=>client.from('player_round_stats')
       .select('round_id,player_id,attended,goals,assists,clean_sheets,penalty_saves,penalty_misses,own_goals,goals_conceded,goal_difference,champion')
       .in('round_id',publishedIds).order('round_id',{ascending:true}).order('player_id',{ascending:true})):
       Promise.resolve([]),
-    currentRound?paged(()=>client.from('roster_entries')
-      .select('manager_id,player_id').eq('round_id',currentRound.id)
-      .order('id',{ascending:true})):Promise.resolve([])
+    paged(()=>client.from('roster_entries')
+      .select('manager_id,round_id,player_id').order('id',{ascending:true}))
   ]);
 
+  const {historicalIds,currentIds}=eligibleRosterManagers(rosterEntries,currentRound?.id);
+  const ownership=currentRound?rosterEntries.filter(e=>
+    String(e.round_id)===String(currentRound.id)&&currentIds.has(String(e.manager_id))):[];
   const lastStats=lastRound?stats.filter(s=>String(s.round_id)===String(lastRound.id)):[];
   const roundNumbers=new Map(rounds.map(r=>[String(r.id),Number(r.round_number)]));
   return {
     lastRound,
     lastStats,
-    seasonPlayers:buildSeason(players,stats,publishedIds,ownership,managerCount,roundNumbers)
+    eligibleManagerIds:historicalIds,
+    ownershipManagerCount:currentIds.size,
+    seasonPlayers:buildSeason(players,stats,publishedIds,ownership,currentIds.size,roundNumbers)
   };
 }
-module.exports={paged,buildSeason,scoredRoster,publishedData};
+module.exports={paged,eligibleRosterManagers,buildSeason,scoredRoster,publishedData};
