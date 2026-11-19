@@ -373,8 +373,8 @@ function render(){
   }
  ensureDisplaySlots();
  $('round-badge').textContent=data.round?'Тур №'+data.round.round_number+(data.locked?' · закрыт':' · открыт'):'Тур не создан';
- $('login-btn').textContent=data.previewMode?'Демо-режим':data.user?data.user.username+' · Выход':'Войти';
-  $('login-btn').disabled=!!data.previewMode;
+ $('login-btn').textContent=data.previewMode?'Посмотреть вход':data.user?data.user.username+' · Выход':'Войти';
+ $('login-btn').disabled=false;
  $('budget').textContent=cash(budgetLimit-used());
  $('budget').closest('.metric').classList.toggle('budget-over',used()>budgetLimit+0.001);
  $('count').textContent=draft.length+' / 8';
@@ -386,10 +386,24 @@ function render(){
  $('content').innerHTML=tab==='team'?teamHtml():tab==='market'?marketHtml():tab==='league'?leagueHtml():tab==='points'?playerPointsHtml():tab==='admin'?sfHtml():rulesHtml();
 }
 function openLogin(){
+ const demo=Boolean(data?.previewMode);
  $('modal').hidden=false;
- $('modal').innerHTML='<div class="dialog"><h2>Вход менеджера</h2><p class="subtle">Первый раз? Выбери «Создать». Уже есть аккаунт? Нажми «Войти».</p><form id="auth-form"><label for="username">Имя менеджера</label><input id="username" class="field" maxlength="40" autocomplete="username" required />'+
-  '<label for="pin">PIN из 6–12 цифр</label><input id="pin" type="password" class="field" inputmode="numeric" minlength="6" maxlength="12" pattern="[0-9]{6,12}" autocomplete="current-password" required />'+
-  '<div class="actions"><button class="primary" type="submit" name="mode" value="login">Войти</button><button class="outline" type="submit" name="mode" value="register">Создать</button><button class="outline" type="button" data-action="close">Отмена</button></div></form><p class="muted">Не используй PIN от банковских карт или других сервисов.</p></div>';
+ $('modal').innerHTML=
+  '<div class="dialog auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-title">'+
+   '<div class="auth-header"><span class="auth-brand" aria-hidden="true">S</span>'+
+    '<div><strong>SREDA FANTASY</strong><small>ФУТБОЛ ПО СРЕДАМ</small></div></div>'+
+   '<h2 id="auth-title">Войти в свою команду</h2>'+
+   '<p class="subtle auth-lead">Используй прежние имя менеджера и PIN — повторная регистрация не нужна.</p>'+
+   (demo?'<p class="auth-demo" role="status">Это демонстрационный просмотр формы. Вход и регистрация в тестовой версии отключены.</p>':'')+
+   '<form id="auth-form"><label for="username">Имя менеджера</label>'+
+    '<input id="username" class="field" maxlength="40" autocomplete="username" placeholder="Имя твоего аккаунта" required />'+
+    '<label for="pin">PIN · 6–12 цифр</label>'+
+    '<input id="pin" type="password" class="field" inputmode="numeric" minlength="6" maxlength="12" pattern="[0-9]{6,12}" autocomplete="current-password" placeholder="Введи свой PIN" required />'+
+    '<div class="auth-actions"><button class="primary" type="submit" name="mode" value="login"'+(demo?' disabled':'')+'>Войти</button>'+
+     '<button class="outline" type="submit" name="mode" value="register"'+(demo?' disabled':'')+'>Создать аккаунт</button></div>'+
+    '<button class="auth-cancel" type="button" data-action="close">Отмена</button>'+
+   '</form><p class="muted auth-hint">PIN не должен совпадать с кодами от банковских карт или других сервисов.</p>'+
+  '</div>';
  $('username').focus();
 }
 async function submitAuth(event){
@@ -440,7 +454,7 @@ async function logout(){try{await api('logout');await refresh();flash('Ты вы
 document.addEventListener('click',event=>{
  const button=event.target.closest('button');if(!button)return;
  if(button.dataset.tab){tab=button.dataset.tab;render();if(tab==='admin'&&!sfAdmin.ready&&!sfAdmin.loading)sfLoad();return;}
- if(button.id==='login-btn'){if(data?.user)logout();else openLogin();return;}
+ if(button.id==='login-btn'){if(data?.previewMode){openLogin();return;}if(data?.user)logout();else openLogin();return;}
  const id=Number(button.dataset.id),action=button.dataset.action;
  if(action==='login')openLogin();else if(action==='close'){$('modal').hidden=true;$('modal').innerHTML='';}
  else if(action==='add')addPlayer(id);else if(action==='remove')removePlayer(id);
