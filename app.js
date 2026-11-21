@@ -8,7 +8,7 @@ const displayDeadline=value=>value?new Intl.DateTimeFormat('ru-RU',{
 const displayDeadlineTime=value=>value?new Intl.DateTimeFormat('ru-RU',{
  timeZone:'Europe/Riga',hour:'2-digit',minute:'2-digit',hour12:false
 }).format(new Date(value)):'—';
-let data=null, draft=[], tab='team', search='', filter='all', saving=false, selectedSwapId=null, swapNotice='';
+let data=null, draft=[], tab='team', search='', filter='all', saving=false, selectedSwapId=null, selectedPitchId=null, marketTargetSlot=null, swapNotice='';
 const byId=id=>data?.players?.find(p=>Number(p.id)===Number(id));
 const pos=p=>p?.position==='Вратарь'?'Вратарь':'Полевой';
 // Both saved and edited squads are valued at CURRENT market prices.
@@ -97,7 +97,7 @@ async function refresh(){
      }catch{/* Corrupt demo state is ignored. */}
    }
    draft=(data.roster||[]).map(x=>({...x,player_id:Number(x.player_id)}));
-   selectedSwapId=null;swapNotice='';
+   selectedSwapId=null;selectedPitchId=null;marketTargetSlot=null;swapNotice='';
    render();
    if(data.previewMode)$('notice').innerHTML='<div class="message" role="status"><strong>Проверка дизайна.</strong> Состав демонстрационный; изменения сохраняются только в этом браузере. Рабочие аккаунты и база не меняются.</div>';
  }
@@ -120,21 +120,35 @@ function assignFlags(){
 }
 function addPlayer(id){
  const p=byId(id);if(!p||!roomFor(p))return;
- const slot=p.position==='Вратарь'?'goalkeeper':draft.filter(e=>e.slot==='starter').length<5?'starter':draft.some(e=>e.slot==='bench1')?'bench2':'bench1';
- draft.push({player_id:id,slot,is_captain:false,is_vice_captain:false});assignFlags();render();
+ ensureDisplaySlots();
+ const slots=p.position==='Вратарь'?['goalkeeper']:['starter:0','starter:1','starter:2','starter:3','starter:4','bench1','bench2'];
+ const vacant=slots.filter(slot=>!draft.some(e=>e.displaySlot===slot));
+ const displaySlot=vacant.includes(marketTargetSlot)?marketTargetSlot:vacant[0];
+ if(!displaySlot)return;
+ const slot=displaySlot.startsWith('starter:')?'starter':displaySlot;
+ draft.push({player_id:id,slot,displaySlot,is_captain:false,is_vice_captain:false});
+ marketTargetSlot=null;selectedSwapId=null;selectedPitchId=null;swapNotice='';
+ assignFlags();render();
 }
 function removePlayer(id){
- if(locked())return;
+ if(locked()||!draft.some(e=>e.player_id===id))return;
+ ensureDisplaySlots();
  draft=draft.filter(e=>e.player_id!==id);
- const fields=draft.filter(e=>e.slot==='starter');
- const bench=draft.filter(e=>e.slot==='bench1'||e.slot==='bench2');
- // When a starter leaves, fill its vacancy with first available bench player.
- if(fields.length<5&&bench.length){
-  const replacement=bench.find(e=>e.slot==='bench1')||bench[0];replacement.slot='starter';
- }
- const remains=draft.filter(e=>e.slot==='bench1'||e.slot==='bench2');
- if(remains.length===1)remains[0].slot='bench1';
+ selectedSwapId=null;selectedPitchId=null;marketTargetSlot=null;
+ swapNotice='Игрок убран. Нажми на пустую позицию, чтобы выбрать нового на рынке.';
  assignFlags();render();
+}
+function fillSlot(slot){
+ if(locked()||!data?.user)return;
+ ensureDisplaySlots();
+ if(!['goalkeeper','starter:0','starter:1','starter:2','starter:3','starter:4','bench1','bench2'].includes(slot)||draft.some(e=>e.displaySlot===slot))return;
+ marketTargetSlot=slot;selectedSwapId=null;selectedPitchId=null;swapNotice='';
+ search='';filter=slot==='goalkeeper'?'gk':'field';tab='market';render();
+ $('content').scrollIntoView({block:'start',behavior:'instant'});
+}
+function selectKeeper(id){
+ if(locked()||!draft.some(e=>e.player_id===id&&e.slot==='goalkeeper'))return;
+ selectedSwapId=null;selectedPitchId=selectedPitchId===id?null:id;swapNotice='';render();
 }
 function changeCaptain(id,which){
  if(locked())return;
@@ -155,12 +169,13 @@ function movePlayer(id){
  if(!clicked||clicked.slot==='goalkeeper')return;
  if(clicked.slot==='starter'){
    selectedSwapId=selectedSwapId===chosenId?null:chosenId;
-   swapNotice='';
+   selectedPitchId=null;swapNotice='';
    render();
    return;
  }
  if(clicked.slot!=='bench1'&&clicked.slot!=='bench2')return;
  if(selectedSwapId==null){
+   selectedPitchId=selectedPitchId===chosenId?null:chosenId;
    swapNotice='Сначала выбери игрока в основе, затем нажми на запасного.';
    render();
    return;
@@ -174,15 +189,17 @@ function movePlayer(id){
    return;
  }
  const outgoing=draft[starterIndex],incoming=draft[benchIndex];
- const benchSlot=incoming.slot;
+ ensureDisplaySlots();
+ const benchSlot=incoming.slot,starterDisplaySlot=outgoing.displaySlot;
  // Keep the exact position on the pitch by swapping array positions as well
  // as the slot values (display slots are derived from roster order).
  const wasCaptain=!!outgoing.is_captain,wasVice=!!outgoing.is_vice_captain;
  outgoing.slot=benchSlot;outgoing.is_captain=false;outgoing.is_vice_captain=false;
- incoming.slot='starter';incoming.is_captain=wasCaptain;incoming.is_vice_captain=wasVice;
+ incoming.slot='starter';incoming.displaySlot=starterDisplaySlot;outgoing.displaySlot=benchSlot;
+ incoming.is_captain=wasCaptain;incoming.is_vice_captain=wasVice;
  draft[starterIndex]=incoming;
  draft[benchIndex]=outgoing;
- selectedSwapId=null;
+ selectedSwapId=null;selectedPitchId=null;
  assignFlags();
  swapNotice='Игроки поменялись местами. Не забудь нажать «Сохранить состав».';
  render();
@@ -200,7 +217,7 @@ function swapGuideHtml(){
 function swapBench(){
  if(locked())return;
  const a=draft.find(x=>x.slot==='bench1'),b=draft.find(x=>x.slot==='bench2');
- if(a&&b){a.slot='bench2';b.slot='bench1';selectedSwapId=null;swapNotice='Порядок запасных изменён. Не забудь сохранить состав.';render();}
+ if(a&&b){a.slot='bench2';b.slot='bench1';selectedSwapId=null;selectedPitchId=null;swapNotice='Порядок запасных изменён. Не забудь сохранить состав.';render();}
 }
 async function saveTeam(){
  if(!data?.user)return openLogin();
@@ -208,7 +225,7 @@ async function saveTeam(){
  if(draft.length!==8)return flash('Сначала набери 8 игроков.',true);
  if(!draft.some(x=>x.is_captain)||!draft.some(x=>x.is_vice_captain))return flash('Выбери капитана и вице-капитана.',true);
  if(used()>budgetLimit+0.001)return flash('Бюджет превышен на '+cash(used()-budgetLimit)+'. Замени футболистов, чтобы уложиться в 50.0.',true);
- selectedSwapId=null;swapNotice='';
+ selectedSwapId=null;selectedPitchId=null;marketTargetSlot=null;swapNotice='';
  if(data?.previewMode){
    data.roster=draft.map(x=>({...x}));
    sessionStorage.setItem('sf_design_demo_squad',JSON.stringify(data.roster));
@@ -257,29 +274,39 @@ function teamHtml(){
   '<div class="actions"><button class="primary" data-tab="market">'+(draft.length?'Открыть рынок':'Выбрать игроков')+'</button></div></section></div>';
 }
 function ensureDisplaySlots(){
- // Assign unique rendering positions for the five unordered starters.
- let i=0;for(const e of draft){if(e.slot==='starter')e.displaySlot='starter:'+(i++);else e.displaySlot=e.slot;}
+ const slots=['starter:0','starter:1','starter:2','starter:3','starter:4'];
+ const occupied=new Set();
+ for(const e of draft){
+  if(e.slot!=='starter')e.displaySlot=e.slot;
+  else if(slots.includes(e.displaySlot)&&!occupied.has(e.displaySlot))occupied.add(e.displaySlot);
+  else delete e.displaySlot;
+ }
+ for(const e of draft){
+  if(e.slot!=='starter'||e.displaySlot)continue;
+  e.displaySlot=slots.find(slot=>!occupied.has(slot));
+  occupied.add(e.displaySlot);
+ }
 }
 function chip(slot,label){
  const e=draft.find(x=>x.displaySlot===slot);
- if(!e)return '<div class="chip placeholder">'+esc(label||'Пусто')+'</div>';
+ if(!e)return locked()?'<div class="chip placeholder">'+esc(label||'Пусто')+'</div>':
+  '<button type="button" class="chip placeholder chip-empty" data-action="fill-slot" data-slot="'+esc(slot)+'" aria-label="Выбрать игрока: '+esc(label||'Пустая позиция')+'"><span class="slot-plus" aria-hidden="true">+</span><span>'+esc(label||'Пусто')+'</span><span class="slot-add-label">Добавить</span></button>';
  const p=byId(e.player_id);
  const kit=p?.position==='Вратарь'?'keeper':'field';
  const marker=e.is_captain?'<span class="chip-caption">К</span>':e.is_vice_captain?'<span class="chip-caption vice">В</span>':'';
  const individual=latestEntry(e.player_id);
  const points=individual?'<span class="chip-score'+(unusedBench(individual)?' chip-score-unused':'')+'">'+scored(displayedPlayerPoints(individual))+(unusedBench(individual)?' · не вышел':'')+'</span>':'';
- const canSwap=!locked()&&p?.position!=='Вратарь';
- const selected=canSwap&&e.slot==='starter'&&selectedSwapId===Number(e.player_id);
+ const canEdit=!locked(),canSwap=canEdit&&e.slot!=='goalkeeper';
+ const selected=canEdit&&(e.slot==='starter'?selectedSwapId===Number(e.player_id):selectedPitchId===Number(e.player_id));
  const target=canSwap&&(e.slot==='bench1'||e.slot==='bench2')&&selectedSwapId!=null;
- const tag=canSwap?'button':'div';
- const labelText=canSwap
-  ?(selected?'Отменить выбор игрока ':target?'Поменять выбранного игрока на ':'Выбрать для замены ')+esc(p.name)
-  :esc(p?.name||'Футболист');
- return '<'+tag+' class="chip'+(canSwap?' chip-clickable':'')+(selected?' chip-swap-selected':'')+(target?' chip-swap-target':'')+'"'+
-  (canSwap?' type="button" data-action="move" data-id="'+p.id+'" aria-label="'+labelText+'" aria-pressed="'+selected+'"':'')+'>'+
+ const tag=canEdit?'button':'div';
+ const labelText=(selected?'Отменить выбор ':target?'Поменять выбранного игрока на ':'Выбрать ')+esc(p?.name||'Футболист');
+ return '<div class="chip-shell'+(selected?' chip-shell-selected':'')+'"><'+tag+' class="chip'+(canEdit?' chip-clickable':'')+(selected?' chip-swap-selected':'')+(target?' chip-swap-target':'')+'"'+
+  (canEdit?' type="button" data-action="'+(canSwap?'move':'inspect-keeper')+'" data-id="'+e.player_id+'" aria-label="'+labelText+'" aria-pressed="'+selected+'"':'')+'>'+
   marker+'<img class="sf-kit" src="assets/sreda-kit-'+kit+'.svg" width="58" height="58" alt="" draggable="false">'+
   '<span class="chip-name">'+esc(p?.name||'?')+'</span><small>'+cash(p?.price)+' млн</small>'+points+
-  '</'+tag+'>';
+  '</'+tag+'>'+
+  (selected?'<button type="button" class="chip-remove-popover" data-action="remove" data-id="'+e.player_id+'" aria-label="Убрать игрока '+esc(p?.name||'')+'">Убрать игрока</button>':'')+'</div>';
 }
 function marketHtml(){
  const filtered=(data?.players||[]).filter(p=>p.active!==false&&p.name.toLowerCase().includes(search.toLowerCase())&&(filter==='all'||(filter==='gk')===(p.position==='Вратарь')));
@@ -287,9 +314,12 @@ function marketHtml(){
   '<div class="row"><input class="search" id="search" placeholder="Поиск игрока" value="'+esc(search)+'" /><select id="filter" class="field" style="width:auto"><option value="all" '+(filter==='all'?'selected':'')+'>Все</option><option value="gk" '+(filter==='gk'?'selected':'')+'>Вратари</option><option value="field" '+(filter==='field'?'selected':'')+'>Полевые</option></select></div>'+
   '<div class="market-list" id="market-list">'+marketRows(filtered)+'</div></section>';
 }
-function marketRows(players){return players.map(p=>{
- const selected=draft.some(e=>e.player_id===p.id);
- return '<div class="entry"><div class="entry-info"><strong>'+esc(p.name)+'</strong><small>'+pos(p)+'</small></div><strong class="price">'+cash(p.price)+'</strong>'+
+function marketRows(players){
+ const own=new Set(draft.map(e=>Number(e.player_id)));
+ const ordered=players.slice().sort((a,b)=>Number(own.has(Number(b.id)))-Number(own.has(Number(a.id))));
+ return ordered.map(p=>{
+ const selected=own.has(Number(p.id));
+ return '<div class="entry'+(selected?' market-owned':'')+'"><div class="entry-info"><strong>'+esc(p.name)+'</strong><small>'+pos(p)+(selected?' · В твоей команде':'')+'</small></div><strong class="price">'+cash(p.price)+'</strong>'+
   '<button class="small-btn" data-action="'+(selected?'remove':'add')+'" data-id="'+p.id+'" '+((selected?!locked():roomFor(p))?'':'disabled')+'>'+(selected?'Убрать':'Добавить')+'</button></div>';
 }).join('')||'<p class="muted">Игроки не найдены.</p>';}
 // Source of truth: backend aggregates current-round ownership over ALL managers.
@@ -336,16 +366,35 @@ function leagueHtml(){
 }
 const displayAveragePoints=value=>value===null||value===undefined?'—':
  Number(value).toLocaleString('ru-RU',{minimumFractionDigits:1,maximumFractionDigits:1});
+let pointsSortKey='season_points',pointsSortDirection=-1,pointsSearch='';
+function sortPlayerStats(players,key,direction){
+ return players.slice().sort((a,b)=>{
+  const rawA=a[key],rawB=b[key];
+  const na=rawA==null||!Number.isFinite(Number(rawA)),nb=rawB==null||!Number.isFinite(Number(rawB));
+  if(na!==nb)return na?1:-1;
+  if(!na&&!nb){const diff=(Number(rawA)-Number(rawB))*direction;if(diff)return diff;}
+  return a.name.localeCompare(b.name,'ru');
+ });
+}
+function sortStats(key){
+ if(!['season_points','average_points_per_round','ownership_percent'].includes(key))return;
+ if(pointsSortKey===key)pointsSortDirection*=-1;else{pointsSortKey=key;pointsSortDirection=-1;}
+ render();
+}
+function statHeading(key,label){
+ const active=pointsSortKey===key;
+ return '<th aria-sort="'+(active?(pointsSortDirection===-1?'descending':'ascending'):'none')+'"><button type="button" class="stat-sort" data-action="sort-stats" data-sort="'+key+'">'+label+' <span aria-hidden="true">'+(active?(pointsSortDirection===-1?'↓':'↑'):'↕')+'</span></button></th>';
+}
 function playerPointsHtml(){
- const players=data?.seasonPlayers||[];
+ const players=sortPlayerStats(data?.seasonPlayers||[],pointsSortKey,pointsSortDirection);
  const count=ownershipManagerCount();
  return '<section class="panel"><h2>Очки футболистов</h2>'+
   '<p class="subtle">Всего очков — сумма за опубликованные туры сезона. Среднее за тур — эта сумма, делённая на количество опубликованных туров, включая туры без участия футболиста. До первого опубликованного тура среднее не рассчитывается.</p>'+
   '<p class="muted">Владение — доля менеджеров с полным сохранённым составом на текущий тур. В расчёте участвуют '+count+' менеджеров; аккаунты без команды не учитываются.</p>'+
-  '<input id="player-points-search" class="search" type="search" placeholder="Найти футболиста" aria-label="Поиск футболиста">'+
+  '<input id="player-points-search" class="search" type="search" placeholder="Найти футболиста" aria-label="Поиск футболиста" value="'+esc(pointsSearch)+'">'+
   '<div class="table-scroll"><table class="league player-points-table"><thead>'+
-  '<tr><th>Футболист</th><th>Всего очков</th><th>Среднее за тур</th><th>Владение</th></tr></thead><tbody>'+
-  players.map(p=>'<tr data-player-name="'+esc(p.name.toLocaleLowerCase('ru'))+'"><td><strong>'+esc(p.name)+'</strong></td>'+
+  '<tr><th>Футболист</th>'+statHeading('season_points','Всего очков')+statHeading('average_points_per_round','Среднее за тур')+statHeading('ownership_percent','Владение')+'</tr></thead><tbody>'+
+  players.map(p=>'<tr data-player-name="'+esc(p.name.toLocaleLowerCase('ru'))+'"'+(p.name.toLocaleLowerCase('ru').includes(pointsSearch.toLocaleLowerCase('ru').trim())?'':' hidden')+'><td><strong>'+esc(p.name)+'</strong></td>'+
    '<td class="numeric">'+scored(p.season_points)+'</td>'+
    '<td class="numeric">'+displayAveragePoints(p.average_points_per_round)+'</td>'+
    '<td class="numeric">'+Number(p.ownership_percent).toLocaleString('ru-RU',{minimumFractionDigits:1,maximumFractionDigits:1})+
@@ -360,6 +409,8 @@ function rulesHtml(){
 }
 function render(){
  if(!data)return;
+ const oldMarket=tab==='market'?$('market-list'):null;
+ const marketScroll=oldMarket?{top:window.scrollY,left:window.scrollX,list:oldMarket.scrollTop}:null;
  let adminNav=document.querySelector('.nav button[data-tab="admin"]');
  if(data.user?.is_admin){
   if(!adminNav){adminNav=document.createElement('button');adminNav.dataset.tab='admin';adminNav.textContent='Админка';document.querySelector('.nav').appendChild(adminNav);}
@@ -388,6 +439,7 @@ function render(){
  $('deadline-short').nextElementSibling.textContent=displayDeadlineTime(data?.round?.deadline_at)+' · Рига';
  document.querySelectorAll('button[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
  $('content').innerHTML=tab==='team'?teamHtml():tab==='market'?marketHtml():tab==='league'?leagueHtml():tab==='points'?playerPointsHtml():tab==='admin'?sfHtml():rulesHtml();
+ if(marketScroll){$('market-list').scrollTop=marketScroll.list;window.scrollTo({top:marketScroll.top,left:marketScroll.left,behavior:'instant'});}
 }
 function openLogin(){
  const demo=Boolean(data?.previewMode);
@@ -457,18 +509,20 @@ async function openManager(managerID){
 async function logout(){try{await api('logout');await refresh();flash('Ты вышел из аккаунта.');}catch(e){flash(e.message,true);}}
 document.addEventListener('click',event=>{
  const button=event.target.closest('button');if(!button)return;
- if(button.dataset.tab){tab=button.dataset.tab;render();if(tab==='admin'&&!sfAdmin.ready&&!sfAdmin.loading)sfLoad();return;}
+ if(button.dataset.tab){if(tab!==button.dataset.tab){selectedSwapId=null;selectedPitchId=null;marketTargetSlot=null;}tab=button.dataset.tab;render();if(tab==='admin'&&!sfAdmin.ready&&!sfAdmin.loading)sfLoad();return;}
  if(button.id==='login-btn'){if(data?.previewMode){openLogin();return;}if(data?.user)logout();else openLogin();return;}
  const id=Number(button.dataset.id),action=button.dataset.action;
  if(action==='login')openLogin();else if(action==='close'){$('modal').hidden=true;$('modal').innerHTML='';}
  else if(action==='add')addPlayer(id);else if(action==='remove')removePlayer(id);
+ else if(action==='fill-slot')fillSlot(button.dataset.slot);else if(action==='inspect-keeper')selectKeeper(id);else if(action==='sort-stats')sortStats(button.dataset.sort);
  else if(action==='cap'||action==='vice')changeCaptain(id,action);
  else if(action==='move')movePlayer(id);else if(action==='swap')swapBench();
  else if(action==='save')saveTeam();else if(action==='view')openManager(button.dataset.id);
 });
 document.addEventListener('input',event=>{
  if(event.target.id==='player-points-search'){
-  const needle=event.target.value.toLocaleLowerCase('ru').trim();
+  pointsSearch=event.target.value;
+  const needle=pointsSearch.toLocaleLowerCase('ru').trim();
   document.querySelectorAll('[data-player-name]').forEach(row=>{
     row.hidden=!row.dataset.playerName.includes(needle);
   });
