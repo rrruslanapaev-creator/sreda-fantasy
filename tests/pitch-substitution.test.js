@@ -11,7 +11,7 @@ function slice(from,to){
  return app.slice(a,b);
 }
 const assign=slice('function assignFlags(){','function addPlayer(');
-const edit=slice('function addPlayer(id){','function changeCaptain(');
+const edit=slice('function addPlayer(id){','// Two-tap');
 const choose=slice('function movePlayer(id){','async function saveTeam(){');
 const display=slice('function ensureDisplaySlots(){','function marketHtml(){');
 const fields=()=>[
@@ -36,7 +36,7 @@ function setup(isLocked=false){
   scored:n=>String(n),displayedPlayerPoints:()=>0,cash:n=>String(n)
  };
  const getters=vm.runInNewContext(assign+edit+choose+display+
-  ';({choose:movePlayer,guide:swapGuideHtml,layout:ensureDisplaySlots,chip,selected:()=>selectedSwapId,notice:()=>swapNotice,remove:removePlayer,add:addPlayer,fill:fillSlot,keeper:selectKeeper,current:()=>draft,target:()=>marketTargetSlot,tab:()=>tab,filter:()=>filter})',context);
+  ';({choose:movePlayer,guide:swapGuideHtml,layout:ensureDisplaySlots,chip,selected:()=>selectedSwapId,notice:()=>swapNotice,remove:removePlayer,add:addPlayer,fill:fillSlot,keeper:selectKeeper,changeCaptain,current:()=>draft,target:()=>marketTargetSlot,tab:()=>tab,filter:()=>filter})',context);
  getters.layout();
  return {draft,...getters};
 }
@@ -148,4 +148,43 @@ test('Locked round disallows removing a player or opening a vacancy',()=>{
  assert.equal(ui.current().length,8);
  assert.equal(ui.tab(),'team');
  assert.doesNotMatch(ui.chip('starter:1','Основа'),/Убрать игрока/);
+});
+
+test('Selected starter menu offers Remove, Captain and Vice-captain in that order',()=>{
+ const ui=setup();ui.choose(4);
+ const h=ui.chip('starter:2','Основа');
+ const remove=h.indexOf('data-action="remove"'),cap=h.indexOf('data-action="cap"'),vice=h.indexOf('data-action="vice"');
+ assert.ok(remove>=0&&cap>remove&&vice>cap);
+ ui.changeCaptain(4,'cap');
+ assert.equal(ui.current().find(e=>e.is_captain).player_id,4);
+ assert.equal(ui.current().find(e=>e.is_vice_captain).player_id,3);
+ assert.equal(ui.current().filter(e=>e.is_captain).length,1);
+ assert.equal(ui.selected(),null);
+});
+test('Choosing existing vice as captain swaps roles, preserving distinct role holders',()=>{
+ const ui=setup();ui.changeCaptain(3,'cap');
+ assert.equal(ui.current().find(e=>e.is_captain).player_id,3);
+ assert.equal(ui.current().find(e=>e.is_vice_captain).player_id,2);
+ ui.changeCaptain(3,'vice');
+ assert.equal(ui.current().find(e=>e.is_captain).player_id,2);
+ assert.equal(ui.current().find(e=>e.is_vice_captain).player_id,3);
+});
+test('Keeper can become captain; bench and locked teams cannot assign roles',()=>{
+ const ui=setup();ui.keeper(1);
+ assert.match(ui.chip('goalkeeper','Вратарь'),/data-action="cap"/);
+ ui.changeCaptain(1,'cap');
+ assert.equal(ui.current().find(e=>e.is_captain).player_id,1);
+ ui.choose(7);
+ assert.doesNotMatch(ui.chip('bench1','Запас 1'),/data-action="(?:cap|vice)"/);
+ ui.changeCaptain(7,'cap');
+ assert.equal(ui.current().find(e=>e.is_captain).player_id,1);
+ const closed=setup(true);closed.changeCaptain(4,'cap');
+ assert.equal(closed.current().find(e=>e.is_captain).player_id,2);
+});
+test('Management list is removed and pitch retains market and save controls',()=>{
+ const part=slice('function teamHtml(){','function ensureDisplaySlots(){');
+ assert.doesNotMatch(part,/Управление составом/);
+ assert.match(part,/data-action="save"/);
+ assert.match(part,/data-action="swap"/);
+ assert.match(part,/data-tab="market"/);
 });
