@@ -21,9 +21,9 @@ function make(count=12){
  }))};
  const ctx={
   data,esc:v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;'),
-  scored:n=>String(n),Number
+  scored:n=>String(n),Number,render:()=>{}
  };
- return {data,api:vm.runInNewContext(impl+';({ownershipText,popularPlayersHtml,leagueHtml,playerPointsHtml,displayAveragePoints})',ctx)};
+ return {data,api:vm.runInNewContext(impl+';({ownershipText,popularPlayersHtml,leagueHtml,playerPointsHtml,displayAveragePoints,sortStats,sortPlayerStats})',ctx)};
 }
 test('League shows ten most popular footballers sorted by ownership, not season points',()=>{
  const {api}=make();
@@ -50,7 +50,7 @@ test('Players has only total, published-round average and ownership columns',()=
  assert.match(h,/Игрок 12/);
  assert.match(h,/3,5/);
  assert.match(h,/—/);
- const headings=Array.from(h.matchAll(/<th>/g));
+ const headings=Array.from(h.matchAll(/<th(?:\s[^>]*)?>/g));
  assert.equal(headings.length,4); // name + precisely three requested metrics
  for(const heading of ['Форма','Голы','Ассисты','Рейтинг','Купили','Продали']) {
    assert.doesNotMatch(h,new RegExp('<th>'+heading+'</th>'));
@@ -93,4 +93,23 @@ test('Preview roster dialog explicitly uses demonstration data and not live futu
  assert.match(part,/payload=\{roster:data\.roster\|\|\[\],published:false,demo:true\}/);
  assert.match(part,/не реальный состав этого менеджера/);
  assert.match(part,/ownershipText\(e\.player_id\)/);
+});
+
+test('Every metric sorts numerically both ways; missing averages stay last',()=>{
+ const {data,api}=make();
+ api.sortStats('ownership_percent');
+ let h=api.playerPointsHtml();
+ assert.ok(h.indexOf('Игрок 2')<h.indexOf('Игрок 1'));
+ assert.match(h,/aria-sort="descending"><button[^>]*data-sort="ownership_percent"/);
+ api.sortStats('ownership_percent');
+ h=api.playerPointsHtml();
+ assert.ok(h.indexOf('Игрок 4')<h.indexOf('Игрок 2'));
+ assert.match(h,/aria-sort="ascending"><button[^>]*data-sort="ownership_percent"/);
+ api.sortStats('average_points_per_round');
+ assert.equal(api.sortPlayerStats(data.seasonPlayers,'average_points_per_round',-1).at(-1).player_id,3);
+ assert.equal(api.sortPlayerStats(data.seasonPlayers,'average_points_per_round',1).at(-1).player_id,3);
+ api.sortStats('season_points');
+ h=api.playerPointsHtml();
+ assert.match(h,/aria-sort="descending"><button[^>]*data-sort="season_points"/);
+ assert.ok(h.indexOf('Игрок 1')<h.indexOf('Игрок 2'));
 });
