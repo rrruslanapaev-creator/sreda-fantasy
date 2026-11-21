@@ -253,3 +253,55 @@ body.theme-fpl .stat-sort:hover,body.theme-fpl .stat-sort:focus-visible{color:va
  body.theme-fpl .chip-empty .slot-plus{font-size:19px}
  body.theme-fpl .chip-empty .slot-add-label{font-size:9px}
 }
+
+/* One pitch rather than a duplicate management list. */
+body.theme-fpl .team-pitch-panel{max-width:760px;margin-inline:auto}
+body.theme-fpl .team-pitch-actions{justify-content:center;align-items:stretch}
+body.theme-fpl .team-pitch-actions .primary{flex:1 1 170px}
+body.theme-fpl .chip-actions-popover{position:absolute;z-index:10;top:0;left:calc(100% + 4px);width:120px;display:grid;gap:2px;padding:4px;border:1px solid #dfd2e7;border-radius:9px;background:#fff;box-shadow:0 5px 15px #26133b44}
+body.theme-fpl .chip-shell[data-pitch-slot="starter:2"] .chip-actions-popover,body.theme-fpl .chip-shell[data-pitch-slot="starter:4"] .chip-actions-popover,body.theme-fpl .chip-shell[data-pitch-slot="bench2"] .chip-actions-popover{left:auto;right:calc(100% + 4px)}
+body.theme-fpl .chip-shell[data-pitch-slot="goalkeeper"] .chip-actions-popover{top:auto;bottom:0}
+body.theme-fpl .chip-actions-popover button{position:static;transform:none;display:block;width:100%;min-height:29px;padding:5px 3px;border:0;border-radius:5px;box-shadow:none;font-size:11px;font-weight:800;text-align:center;white-space:nowrap;cursor:pointer}
+body.theme-fpl .chip-actions-popover .chip-remove-popover{background:#fff0f3;color:#a42540}
+body.theme-fpl .chip-actions-popover .chip-role-action{background:#f4eff7;color:var(--sf-purple)}
+body.theme-fpl .chip-actions-popover .role-current{background:#d9ff75;color:#28113f}
+body.theme-fpl .chip-actions-popover button:hover,body.theme-fpl .chip-actions-popover button:focus-visible{outline:2px solid #8463a3;outline-offset:-2px}
+/* Previous published round: original positions, credited points and actual substitutions. */
+body.theme-fpl .historical-roster-dialog{width:min(560px,100%);max-height:92vh;display:flex;flex-direction:column;overflow:hidden}
+body.theme-fpl .historical-roster-dialog h2{overflow-wrap:anywhere}
+body.theme-fpl .historical-roster-scroll{min-height:0;max-height:68vh;overflow:auto;overscroll-behavior:contain;padding:2px}
+body.theme-fpl .historical-pitch .pitch{margin:0;min-height:0;padding:9px 5px;border:3px solid #fff;border-radius:9px}
+body.theme-fpl .historical-pitch .formation{min-height:0;grid-template-rows:repeat(4,minmax(99px,auto));gap:4px}
+body.theme-fpl .historical-pitch .slot{max-width:112px}
+body.theme-fpl .historical-pitch .chip{min-height:0;padding:3px 0 0}
+body.theme-fpl .historical-pitch .sf-kit{width:44px;height:44px}
+body.theme-fpl .historical-pitch .chip-name{font-size:10px}
+body.theme-fpl .historical-pitch .history-chip-points{display:block;width:100%;padding:3px 2px;background:#c9f6d9;color:#195c40;font-size:14px;font-weight:900;line-height:1.1}
+body.theme-fpl .historical-pitch .history-chip-points span{display:block;font-size:9px;font-weight:650;margin-top:2px}
+body.theme-fpl .historical-pitch .history-points-unused{background:#eedff4;color:#674577}
+body.theme-fpl .historical-pitch .history-ownership,body.theme-fpl .historical-pitch .history-unscored{display:block;width:100%;background:#45235f;color:#fff;font-size:9px;line-height:1.25;padding:3px 0;border-radius:0 0 4px 4px}
+body.theme-fpl .historical-pitch .history-absent .sf-kit{opacity:.58;filter:grayscale(1)}
+body.theme-fpl .historical-pitch .history-absent .history-chip-points{background:#e8e5eb;color:#6e6277}
+body.theme-fpl .historical-pitch .history-substituted .history-chip-points{background:#a4f6e7;color:#184f49}
+body.theme-fpl .historical-pitch .bench{margin:0;padding:6px 10px;gap:12px;border-radius:9px}
+body.theme-fpl .historical-pitch .bench .chip-shell{max-width:112px}
+body.theme-fpl .historical-empty{min-height:75px!important}
+body.theme-fpl .history-bench-heading{font-size:11px;color:#695376;font-weight:800;margin:8px 0 4px}
+body.theme-fpl .history-legend{font-size:11px;line-height:1.45;margin-bottom:2px}
+@media(max-width:600px){
+ body.theme-fpl .chip-actions-popover{width:100px;left:calc(100% + 1px);padding:3px}
+ body.theme-fpl .chip-actions-popover button{font-size:10px;min-height:27px}
+ body.theme-fpl .chip-shell[data-pitch-slot="starter:2"] .chip-actions-popover,body.theme-fpl .chip-shell[data-pitch-slot="starter:4"] .chip-actions-popover,body.theme-fpl .chip-shell[data-pitch-slot="bench2"] .chip-actions-popover{right:calc(100% + 1px)}
+ body.theme-fpl .historical-roster-dialog{max-height:90vh;padding:13px}
+ body.theme-fpl .historical-roster-scroll{max-height:65vh}
+ body.theme-fpl .historical-pitch .formation{grid-template-rows:repeat(4,minmax(90px,auto));gap:2px}
+ body.theme-fpl .historical-pitch .sf-kit{width:38px;height:38px}
+ body.theme-fpl .historical-pitch .chip-name{font-size:9px}
+ body.theme-fpl .historical-pitch .history-chip-points{font-size:12px}
+ body.theme-fpl .historical-pitch .history-chip-points span{font-size:8px}
+ body.theme-fpl .historical-pitch .history-ownership{font-size:8px}
+}
+@media(max-width:360px){
+ body.theme-fpl .chip-actions-popover{left:50%;transform:translateX(-50%);top:0}
+ body.theme-fpl .chip-shell[data-pitch-slot="starter:2"] .chip-actions-popover,body.theme-fpl .chip-shell[data-pitch-slot="starter:4"] .chip-actions-popover,body.theme-fpl .chip-shell[data-pitch-slot="bench2"] .chip-actions-popover{left:50%;right:auto}
+}
