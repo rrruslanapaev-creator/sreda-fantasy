@@ -163,7 +163,7 @@ function changeCaptain(id,which){
  if(swapsRoles&&previous&&previous!==selected&&['goalkeeper','starter'].includes(previous.slot))previous[other]=true;
  assignFlags();
  selectedSwapId=null;selectedPitchId=null;
- swapNotice=(which==='cap'?'Капитан: ':'Вице-капитан: ')+(byId(id)?.name||'Футболист')+'. Не забудь сохранить состав.';
+ swapNotice=(which==='cap'?'Капитан: ':'Вице-капитан: ') +esc(byId(id)?.name||'Футболист')+'. Не забудь сохранить состав.';
  render();
 }
 // Two-tap selection on the pitch or in the squad list. No transfer is created:
