@@ -11,6 +11,7 @@ function slice(from,to){
  return app.slice(a,b);
 }
 const assign=slice('function assignFlags(){','function addPlayer(');
+const edit=slice('function addPlayer(id){','function changeCaptain(');
 const choose=slice('function movePlayer(id){','async function saveTeam(){');
 const display=slice('function ensureDisplaySlots(){','function marketHtml(){');
 const fields=()=>[
@@ -26,14 +27,16 @@ const fields=()=>[
 function setup(isLocked=false){
  const draft=fields();
  const context={
-  draft,selectedSwapId:null,swapNotice:'',
+  draft,selectedSwapId:null,selectedPitchId:null,marketTargetSlot:null,swapNotice:'',
+  data:{user:{id:'test'}},tab:'team',search:'old query',filter:'all',roomFor:p=>!isLocked,
+  $:()=>({scrollIntoView:()=>{}}),
   locked:()=>isLocked,render:()=>{},
   esc:x=>String(x),byId:id=>({id,name:'Игрок '+id,position:id===1?'Вратарь':'Полевой',price:5}),
   latestEntry:()=>null,unusedBench:()=>false,
   scored:n=>String(n),displayedPlayerPoints:()=>0,cash:n=>String(n)
  };
- const getters=vm.runInNewContext(assign+choose+display+
-  ';({choose:movePlayer,guide:swapGuideHtml,layout:ensureDisplaySlots,chip,selected:()=>selectedSwapId,notice:()=>swapNotice})',context);
+ const getters=vm.runInNewContext(assign+edit+choose+display+
+  ';({choose:movePlayer,guide:swapGuideHtml,layout:ensureDisplaySlots,chip,selected:()=>selectedSwapId,notice:()=>swapNotice,remove:removePlayer,add:addPlayer,fill:fillSlot,keeper:selectKeeper,current:()=>draft,target:()=>marketTargetSlot,tab:()=>tab,filter:()=>filter})',context);
  getters.layout();
  return {draft,...getters};
 }
@@ -101,4 +104,48 @@ test('Substitution preserves the team budget and the original eight players',()=
  assert.equal(ui.draft.length,8);
  assert.equal(ui.draft.filter(e=>e.is_captain).length,1);
  assert.equal(ui.draft.filter(e=>e.is_vice_captain).length,1);
+});
+
+test('Remove action appears for the selected starter, and his exact position stays empty',()=>{
+ const ui=setup();
+ ui.choose(4);
+ assert.match(ui.chip('starter:2','Основа'),/Убрать игрока/);
+ ui.remove(4);ui.layout();
+ assert.equal(ui.current().length,7);
+ assert.equal(ui.current().find(e=>e.player_id===7).slot,'bench1');
+ assert.equal(ui.current().find(e=>e.player_id===8).slot,'bench2');
+ assert.match(ui.chip('starter:2','Основа'),/data-action="fill-slot"/);
+ assert.match(ui.chip('starter:3','Основа'),/Игрок 5/);
+ ui.fill('starter:2');
+ assert.equal(ui.tab(),'market');
+ assert.equal(ui.filter(),'field');
+ assert.equal(ui.target(),'starter:2');
+ ui.add(9);ui.layout();
+ assert.match(ui.chip('starter:2','Основа'),/Игрок 9/);
+ assert.equal(ui.current().length,8);
+});
+test('A vacant bench slot is filled instead of shifting another bench player',()=>{
+ const ui=setup();
+ ui.choose(7);
+ assert.match(ui.chip('bench1','Запас 1'),/Убрать игрока/);
+ ui.remove(7);ui.layout();
+ assert.match(ui.chip('bench1','Запас 1'),/data-action="fill-slot"/);
+ assert.match(ui.chip('bench2','Запас 2'),/Игрок 8/);
+ ui.fill('bench1');ui.add(9);ui.layout();
+ assert.match(ui.chip('bench1','Запас 1'),/Игрок 9/);
+});
+test('Keeper can be removed without being swapped, and vacancy opens the goalkeeper filter',()=>{
+ const ui=setup();ui.keeper(1);
+ assert.match(ui.chip('goalkeeper','Вратарь'),/Убрать игрока/);
+ ui.remove(1);ui.layout();
+ assert.match(ui.chip('goalkeeper','Вратарь'),/data-action="fill-slot"/);
+ ui.fill('goalkeeper');assert.equal(ui.filter(),'gk');
+ ui.add(1);ui.layout();
+ assert.match(ui.chip('goalkeeper','Вратарь'),/Игрок 1/);
+});
+test('Locked round disallows removing a player or opening a vacancy',()=>{
+ const ui=setup(true);ui.remove(3);ui.fill('starter:1');
+ assert.equal(ui.current().length,8);
+ assert.equal(ui.tab(),'team');
+ assert.doesNotMatch(ui.chip('starter:1','Основа'),/Убрать игрока/);
 });
