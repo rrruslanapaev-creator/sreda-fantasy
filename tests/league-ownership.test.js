@@ -92,7 +92,11 @@ test('Preview roster dialog explicitly uses demonstration data and not live futu
  assert.match(part,/if\(data\?\.previewMode\)/);
  assert.match(part,/payload=\{roster:data\.roster\|\|\[\],published:false,demo:true\}/);
  assert.match(part,/не реальный состав этого менеджера/);
- assert.match(part,/ownershipText\(e\.player_id\)/);
+ assert.match(part,/historicalPitchHtml\(roster,Boolean\(payload\.published\)\)/);
+ assert.match(part,/const round=data\?\.lastRound\|\|\(data\?\.previewMode\?data\?\.round:null\)/);
+ assert.match(part,/if\(!payload\.published\)throw Error/);
+ const pitch=app.slice(app.indexOf('function historicalPitchHtml('),start);
+ assert.match(pitch,/ownershipText\(e\.player_id\)/);
 });
 
 test('Every metric sorts numerically both ways; missing averages stay last',()=>{
@@ -112,4 +116,56 @@ test('Every metric sorts numerically both ways; missing averages stay last',()=>
  h=api.playerPointsHtml();
  assert.match(h,/aria-sort="descending"><button[^>]*data-sort="season_points"/);
  assert.ok(h.indexOf('Игрок 1')<h.indexOf('Игрок 2'));
+});
+
+test('Historical modal renders an actual field, bench and credited points without editable buttons',()=>{
+ const start=app.indexOf('function historicalPitchHtml('),end=app.indexOf('async function openManager(',start);
+ const part=app.slice(start,end);
+ const roster=[
+  {player_id:1,slot:'goalkeeper',attended:true,counted:true,points:22,raw_points:22},
+  {player_id:2,slot:'starter',is_captain:true,attended:true,counted:true,points:14,raw_points:7,multiplier:2},
+  {player_id:3,slot:'starter',is_vice_captain:true,attended:false,counted:false,points:0},
+  {player_id:4,slot:'starter',attended:true,counted:true,points:5},
+  {player_id:5,slot:'starter',attended:true,counted:true,points:1},
+  {player_id:6,slot:'starter',attended:true,counted:true,points:2},
+  {player_id:7,slot:'bench1',attended:true,counted:true,substituted:true,points:0,raw_points:0},
+  {player_id:8,slot:'bench2',attended:true,counted:false,points:0,raw_points:8}
+ ];
+ const before=JSON.stringify(roster);
+ const ctx={roster,byId:id=>({name:'Игрок '+id}),esc:String,scored:n=>String(n),
+  unusedBench:e=>e.attended&&!e.counted&&e.slot.startsWith('bench'),
+  displayedPlayerPoints:e=>e.attended&&!e.counted&&e.slot.startsWith('bench')?e.raw_points:e.points,
+  ownershipText:()=> 'Владение: 20%',ownershipDetails:()=>({percent:'20%'})
+ };
+ const h=vm.runInNewContext(part+';historicalPitchHtml(roster,true)',ctx);
+ assert.match(h,/class="pitch"/);assert.match(h,/class="formation"/);assert.match(h,/class="bench"/);
+ assert.equal((h.match(/class="chip history-chip/g)||[]).length,8);
+ assert.match(h,/history-substituted/);assert.match(h,/Автозамена/);
+ assert.match(h,/Не играл/);assert.match(h,/Не вышел/);
+ assert.match(h,/history-points-unused[^>]*>8/);
+ assert.match(h,/×2 · в зачёт/);assert.match(h,/20% влад\./);
+ assert.doesNotMatch(h,/data-action=|<button/);
+ assert.equal(JSON.stringify(roster),before);
+});
+test('Without a published round, production manager view never requests the current round',async()=>{
+ const start=app.indexOf('async function openManager(managerID){'),end=app.indexOf('async function logout(){',start);
+ const part=app.slice(start,end);
+ let requests=0;let message='';
+ await vm.runInNewContext(part+';openManager("manager-id")',{
+   data:{round:{id:3,round_number:3},lastRound:null,previewMode:false},
+   fetch:()=>{requests++;throw Error('Unexpected fetch');},flash:m=>{message=m;}
+ });
+ assert.equal(requests,0);assert.match(message,/ещё не опубликованы/);
+});
+test('Historical dialog fetches only the last published round, not the new round',async()=>{
+ const start=app.indexOf('async function openManager(managerID){'),end=app.indexOf('async function logout(){',start);
+ const part=app.slice(start,end);
+ let url='';const modal={hidden:true,innerHTML:''};
+ await vm.runInNewContext(part+';openManager("manager-id")',{
+  data:{round:{id:3,round_number:3},lastRound:{id:2,round_number:2},leaderboard:[{id:'manager-id',username:'Manager'}]},
+  fetch:async u=>{url=u;return {ok:true,json:async()=>({published:true,roster:[],points:0})};},
+  flash:m=>{throw Error(m);},$:()=>modal,esc:String,scored:String,historicalPitchHtml:()=>'<div class="pitch"></div>'
+ });
+ assert.match(url,/&round=2$/);assert.doesNotMatch(url,/round=3/);
+ assert.equal(modal.hidden,false);assert.match(modal.innerHTML,/Очки за тур №2/);
 });

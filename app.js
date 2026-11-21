@@ -151,13 +151,19 @@ function selectKeeper(id){
  selectedSwapId=null;selectedPitchId=selectedPitchId===id?null:id;swapNotice='';render();
 }
 function changeCaptain(id,which){
- if(locked())return;
+ if(locked()||!['cap','vice'].includes(which))return;
  const selected=draft.find(e=>e.player_id===id);
  if(!selected||!['goalkeeper','starter'].includes(selected.slot))return;
  const key=which==='cap'?'is_captain':'is_vice_captain';
  const other=which==='cap'?'is_vice_captain':'is_captain';
+ const previous=draft.find(e=>e[key]);
+ const swapsRoles=selected[other];
  for(const e of draft)e[key]=e.player_id===id;
  selected[other]=false;
+ if(swapsRoles&&previous&&previous!==selected&&['goalkeeper','starter'].includes(previous.slot))previous[other]=true;
+ assignFlags();
+ selectedSwapId=null;selectedPitchId=null;
+ swapNotice=(which==='cap'?'Капитан: ':'Вице-капитан: ') +esc(byId(id)?.name||'Футболист')+'. Не забудь сохранить состав.';
  render();
 }
 // Two-tap selection on the pitch or in the squad list. No transfer is created:
@@ -255,23 +261,14 @@ function boostPanelHtml(){
 }
 function teamHtml(){
  if(!data?.user)return '<section class="panel"><h2>Собери свою команду</h2><p class="subtle">Войди по имени и PIN или зарегистрируй нового менеджера. Состав будет храниться в общей базе.</p><button class="primary" data-action="login">Войти / создать менеджера</button></section>';
- const rows=draft.map(e=>{const p=byId(e.player_id);if(!p)return '';
-  const starter=e.slot==='goalkeeper'||e.slot==='starter';
-  return '<div class="entry"><div class="entry-info"><strong>'+esc(p.name)+'</strong><small>'+esc(pos(p))+' · '+slotTitle(e)+' · '+cash(p.price)+'</small></div>'+
-   '<div class="entry-actions">'+scoreBadge(latestEntry(p.id))+(starter?'<button class="small-btn '+(e.is_captain?'marked':'')+'" data-action="cap" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>К</button><button class="small-btn '+(e.is_vice_captain?'marked':'')+'" data-action="vice" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>ВК</button>':'')+
-   (p.position!=='Вратарь'?'<button class="small-btn'+(selectedSwapId===p.id?' marked':'')+'" data-action="move" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>'+(starter?(selectedSwapId===p.id?'Отменить выбор':'Выбрать'):selectedSwapId!=null?'Поменять':'Выбрать основу')+'</button>':'')+
-   '<button class="small-btn" data-action="remove" data-id="'+p.id+'" '+(locked()?'disabled':'')+'>×</button></div></div>';
- }).join('');
- return budgetAlertHtml()+myLastTourHtml()+boostPanelHtml()+(data.round?.unlimited_transfers&&!locked()?'<div class="message">Тур №'+data.round.round_number+': <strong>неограниченные бесплатные трансферы</strong> до '+esc(displayDeadline(data.round.deadline_at))+' по Риге. Можно полностью пересобрать восьмёрку, менять капитана и запасных. Очки прошлого тура сохраняются выше.</div>':'')+'<div class="columns"><section class="panel"><h2>Твой состав · тур №'+data.round?.round_number+'</h2><p class="muted">На поле — 5 полевых по схеме 1–2–2 и вратарь</p><div class="pitch"><div class="formation">'+
+  return budgetAlertHtml()+myLastTourHtml()+boostPanelHtml()+(data.round?.unlimited_transfers&&!locked()?'<div class="message">Тур №'+data.round.round_number+': <strong>неограниченные бесплатные трансферы</strong> до '+esc(displayDeadline(data.round.deadline_at))+' по Риге. Можно полностью пересобрать восьмёрку, менять капитана и запасных. Очки прошлого тура сохраняются выше.</div>':'')+'<section class="panel team-pitch-panel"><h2>Твой состав · тур №'+data.round?.round_number+'</h2><p class="muted">На поле — 5 полевых по схеме 1–2–2 и вратарь</p><div class="pitch"><div class="formation">'+
   '<div class="slot front">'+chip('starter:0','Нападение')+'</div>'+
   ['mid-left','mid-right','back-left','back-right'].map((c,i)=>'<div class="slot '+c+'">'+chip('starter:'+(i+1),'Основа')+'</div>').join('')+
   '<div class="slot keeper">'+chip('goalkeeper','Вратарь')+'</div></div></div>'+
   '<div class="bench">'+chip('bench1','Запас 1')+chip('bench2','Запас 2')+'</div>'+swapGuideHtml()+
-  '<div class="actions"><button class="outline" data-action="swap" '+(locked()?'disabled':'')+'>Порядок запаса ⇄</button><button class="primary" data-action="save" '+(locked()?'disabled':'')+'>Сохранить состав</button></div>'+
+  '<div class="actions team-pitch-actions"><button class="outline" data-action="swap" '+(locked()?'disabled':'')+'>Порядок запаса ⇄</button><button class="outline" data-tab="market">Открыть рынок</button><button class="primary" data-action="save" '+(locked()?'disabled':'')+'>Сохранить состав</button></div>'+
   (locked()?'<div class="warning">Тур закрыт: изменения состава недоступны.</div>':'<p class="muted">Изменения становятся действительными только после нажатия «Сохранить состав». '+(data.round?.unlimited_transfers?'Лимита трансферов в этом туре нет.':'')+'</p>')+
-  '</section><section class="panel"><h2>Управление составом</h2><p class="muted">К — капитан, ВК — вице-капитан. Перестановки между основой и запасом бесплатны.</p>'+
-  (rows||'<p class="subtle">Пока нет игроков. Открой рынок.</p>')+
-  '<div class="actions"><button class="primary" data-tab="market">'+(draft.length?'Открыть рынок':'Выбрать игроков')+'</button></div></section></div>';
+  '</section>';
 }
 function ensureDisplaySlots(){
  const slots=['starter:0','starter:1','starter:2','starter:3','starter:4'];
@@ -300,13 +297,20 @@ function chip(slot,label){
  const selected=canEdit&&(e.slot==='starter'?selectedSwapId===Number(e.player_id):selectedPitchId===Number(e.player_id));
  const target=canSwap&&(e.slot==='bench1'||e.slot==='bench2')&&selectedSwapId!=null;
  const tag=canEdit?'button':'div';
+ const canAssign=e.slot==='starter'||e.slot==='goalkeeper';
+ const roleButtons=canAssign?
+  '<button type="button" class="chip-role-action'+(e.is_captain?' role-current':'')+'" data-action="cap" data-id="'+e.player_id+'" aria-pressed="'+Boolean(e.is_captain)+'">Капитан'+(e.is_captain?' ✓':'')+'</button>'+
+  '<button type="button" class="chip-role-action'+(e.is_vice_captain?' role-current':'')+'" data-action="vice" data-id="'+e.player_id+'" aria-pressed="'+Boolean(e.is_vice_captain)+'">Вице-капитан'+(e.is_vice_captain?' ✓':'')+'</button>':'';
+ const menu=selected?
+  '<div class="chip-actions-popover" role="group" aria-label="Действия с игроком">'+
+  '<button type="button" class="chip-remove-popover" data-action="remove" data-id="'+e.player_id+'" aria-label="Убрать игрока '+esc(p?.name||'')+'">Убрать игрока</button>'+roleButtons+'</div>':'';
  const labelText=(selected?'Отменить выбор ':target?'Поменять выбранного игрока на ':'Выбрать ')+esc(p?.name||'Футболист');
- return '<div class="chip-shell'+(selected?' chip-shell-selected':'')+'"><'+tag+' class="chip'+(canEdit?' chip-clickable':'')+(selected?' chip-swap-selected':'')+(target?' chip-swap-target':'')+'"'+
+ return '<div class="chip-shell'+(selected?' chip-shell-selected':'')+'" data-pitch-slot="'+esc(slot)+'"><'+tag+' class="chip'+(canEdit?' chip-clickable':'')+(selected?' chip-swap-selected':'')+(target?' chip-swap-target':'')+'"'+
   (canEdit?' type="button" data-action="'+(canSwap?'move':'inspect-keeper')+'" data-id="'+e.player_id+'" aria-label="'+labelText+'" aria-pressed="'+selected+'"':'')+'>'+
   marker+'<img class="sf-kit" src="assets/sreda-kit-'+kit+'.svg" width="58" height="58" alt="" draggable="false">'+
   '<span class="chip-name">'+esc(p?.name||'?')+'</span><small>'+cash(p?.price)+' млн</small>'+points+
   '</'+tag+'>'+
-  (selected?'<button type="button" class="chip-remove-popover" data-action="remove" data-id="'+e.player_id+'" aria-label="Убрать игрока '+esc(p?.name||'')+'">Убрать игрока</button>':'')+'</div>';
+  menu+'</div>';
 }
 function marketHtml(){
  const filtered=(data?.players||[]).filter(p=>p.active!==false&&p.name.toLowerCase().includes(search.toLowerCase())&&(filter==='all'||(filter==='gk')===(p.position==='Вратарь')));
@@ -359,7 +363,7 @@ function popularPlayersHtml(){
 }
 function leagueHtml(){
  const people=data?.leaderboard||[];
- return '<section class="panel"><h2>Таблица менеджеров</h2><p class="muted">Нажми на имя, чтобы посмотреть состав и вклад каждого футболиста в последнем завершённом туре. Составы ещё не завершённых туров скрыты до дедлайна.</p>'+
+ return '<section class="panel"><h2>Таблица менеджеров</h2><p class="muted">Нажми на имя, чтобы посмотреть состав и вклад каждого футболиста в последнем завершённом туре. В этом окне показываются только составы последнего опубликованного тура.</p>'+
   '<table class="league"><thead><tr><th>№</th><th>Менеджер</th><th>Очки за сезон</th></tr></thead><tbody>'+
   people.map((m,i)=>'<tr><td>'+(i+1)+'</td><td><button class="link" data-action="view" data-id="'+esc(m.id)+'">'+esc(m.username)+'</button></td><td>'+scored(m.points)+'</td></tr>').join('')+
   '</tbody></table>'+(people.length?'':'<p class="muted">Менеджеров пока нет.</p>')+'</section>'+popularPlayersHtml();
@@ -469,9 +473,35 @@ async function submitAuth(event){
  try{await api(action,{username,pin});$('modal').hidden=true;$('modal').innerHTML='';await refresh();flash('Ты вошёл как '+username+'.');}
  catch(e){const old=$('modal').querySelector('.modal-error');if(old)old.remove();$('auth-form').insertAdjacentHTML('beforeend','<p class="message error modal-error">'+esc(e.message)+'</p>');}
 }
+function historicalPitchHtml(roster,published){
+ if(!roster.length)return '<p class="subtle">Состав в этом туре не сохранён.</p>';
+ // Never change the saved lineup: show the original positions and mark
+ // the bench players who actually contributed via automatic substitutions.
+ const starters=roster.filter(e=>e.slot==='starter');
+ const historyChip=(e,label)=>{
+  if(!e)return '<div class="chip placeholder historical-empty">'+esc(label)+'</div>';
+  const p=byId(e.player_id);
+  const name=p?.name||'Футболист №'+e.player_id;
+  const kit=e.slot==='goalkeeper'?'keeper':'field';
+  const marker=e.is_captain?'<span class="chip-caption" title="Капитан">К</span>':e.is_vice_captain?'<span class="chip-caption vice" title="Вице-капитан">В</span>':'';
+  const absent=published&&!e.attended;
+  const unused=published&&unusedBench(e);
+  const detail=!published?label:absent?'Не играл':e.substituted?'Автозамена':unused?'Не вышел':e.multiplier===2?'×2 · в зачёт':'В зачёт';
+  const pts=published?'<span class="history-chip-points'+(unused?' history-points-unused':'')+'">'+scored(displayedPlayerPoints(e))+'<span>'+detail+'</span></span>':'<span class="history-unscored">'+esc(detail)+'</span>';
+  return '<div class="chip-shell"><div class="chip history-chip'+(absent?' history-absent':'')+(e.substituted&&published?' history-substituted':'')+'" title="'+esc(name+' · '+ownershipText(e.player_id))+'">'+
+    marker+'<img class="sf-kit" src="assets/sreda-kit-'+kit+'.svg" width="58" height="58" alt="" draggable="false">'+
+    '<span class="chip-name">'+esc(name)+'</span>'+pts+'<span class="history-ownership">'+esc(ownershipDetails(e.player_id)?.percent||'—')+' влад.</span></div></div>';
+ };
+ return '<div class="historical-pitch"><div class="pitch"><div class="formation">'+
+  '<div class="slot front">'+historyChip(starters[0],'Нападение')+'</div>'+
+  ['mid-left','mid-right','back-left','back-right'].map((c,i)=>'<div class="slot '+c+'">'+historyChip(starters[i+1],'Основа')+'</div>').join('')+
+  '<div class="slot keeper">'+historyChip(roster.find(e=>e.slot==='goalkeeper'),'Вратарь')+'</div></div></div>'+
+  '<p class="history-bench-heading">Запасные · порядок 1–2</p><div class="bench">'+historyChip(roster.find(e=>e.slot==='bench1'),'Запас 1')+historyChip(roster.find(e=>e.slot==='bench2'),'Запас 2')+'</div></div>'+
+  (published?'<p class="muted history-legend">Показана сохранённая расстановка. «Автозамена» — очки запасного засчитаны. «Не вышел» — личные очки не включены в итог. Владение — на текущий тур.</p>':'');
+}
 async function openManager(managerID){
- const round=data?.lastRound||data?.round;
- if(!round)return flash('Тур не создан.',true);
+ const round=data?.lastRound||(data?.previewMode?data?.round:null);
+ if(!round)return flash('Результаты предыдущего тура ещё не опубликованы. Составы текущего тура скрыты.',true);
  try{
   let payload;
   if(data?.previewMode){
@@ -482,27 +512,20 @@ async function openManager(managerID){
    const response=await fetch('/api/handler?action=roster&manager='+encodeURIComponent(managerID)+'&round='+round.id);
    payload=await response.json();
    if(!response.ok)throw Error(payload.error||'Доступ закрыт');
+   if(!payload.published)throw Error('Результаты этого тура ещё не опубликованы.');
   }
   const manager=data.leaderboard.find(m=>m.id===managerID);
   const roster=payload.roster||[];
   const total=payload.published?'<div class="modal-total"><span>Очки за тур №'+round.round_number+'</span><strong>'+scored(payload.points)+'</strong></div>':'';
-  const content=roster.length?roster.map(e=>{
-    const p=byId(e.player_id);
-    const meta=esc(slotTitle(e))+(e.is_captain?' · капитан':e.is_vice_captain?' · вице-капитан':'');
-    const involvement=payload.published?(e.attended?(e.counted?(e.substituted?' · вышел на замену':''):(e.slot==='bench1'||e.slot==='bench2'?' · не вышел':'')):' · не играл'):'';
-    return '<div class="entry"><div class="entry-info"><strong>'+esc(p?.name||'Футболист №'+e.player_id)+'</strong>'+
-      '<small>'+meta+involvement+'</small>'+
-      '<small class="owner-percent">'+esc(ownershipText(e.player_id))+'</small></div>'+
-      (payload.published?scoreBadge(e):'<span>'+esc(e.is_captain?'К':e.is_vice_captain?'ВК':'')+'</span>')+'</div>';
-   }).join(''):'<p class="subtle">Состав не сохранён.</p>';
+  const content=historicalPitchHtml(roster,Boolean(payload.published));
   $('modal').hidden=false;
-  $('modal').innerHTML='<div class="dialog"><h2>'+esc(manager?.username||'Менеджер')+'</h2>'+
+  $('modal').innerHTML='<div class="dialog historical-roster-dialog" role="dialog" aria-modal="true" aria-label="Состав менеджера за прошлый тур"><h2>'+esc(manager?.username||'Менеджер')+'</h2>'+
    (payload.demo
      ?'<p class="muted"><strong>Демонстрация просмотра состава.</strong> Показан пример команды, а не реальный состав этого менеджера. Настоящие составы следующего тура остаются скрыты до дедлайна.</p>'
      :payload.published
        ?'<p class="muted">Состав последнего опубликованного тура №'+round.round_number+'. Очки включают капитанские бонусы и замены.</p>'
        :'<p class="muted">Состав тура №'+round.round_number+'</p>')+
-   total+'<div class="modal-roster-scroll">'+content+'</div>'+
+   total+'<div class="modal-roster-scroll historical-roster-scroll">'+content+'</div>'+
    '<div class="actions"><button class="outline" data-action="close">Закрыть</button></div></div>';
  }catch(e){flash(e.message,true);}
 }
