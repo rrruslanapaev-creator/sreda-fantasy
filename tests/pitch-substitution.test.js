@@ -77,21 +77,55 @@ test('Repeated tap cancels selection; tapping another starter changes selection'
  assert.equal(ui.draft.find(e=>e.player_id===8).is_vice_captain,true);
  assert.equal(ui.draft.find(e=>e.player_id===2).is_captain,true);
 });
-test('Clicking bench first changes nothing; goalkeeper cannot be swapped',()=>{
+test('Bench-first selection highlights the bench player and the eligible starters; swaps on second tap',()=>{
  const ui=setup();
  ui.choose(7);
  assert.equal(ui.selected(),null);
- assert.match(ui.guide(),/Сначала выбери/);
+ assert.match(ui.chip('bench1','Запас 1'),/chip-swap-selected/);
+ assert.match(ui.chip('starter:0','Основа'),/chip-swap-target/);
+ assert.match(ui.guide(),/Выбран Игрок 7/);
+ assert.match(ui.guide(),/футболиста в основе/);
+ assert.equal(ui.draft[6].player_id,7);
+ ui.choose(2);ui.layout();
+ assert.equal(ui.draft[1].player_id,7);
+ assert.equal(ui.draft[6].player_id,2);
+ assert.equal(ui.current().find(e=>e.player_id===7).is_captain,true);
+ assert.equal(ui.current().find(e=>e.player_id===2).is_captain,false);
+ assert.equal(ui.current().find(e=>e.is_vice_captain).player_id,3);
+ assert.match(ui.chip('starter:0','Основа'),/Игрок 7/);
+ assert.match(ui.chip('bench1','Запас 1'),/Игрок 2/);
+ assert.doesNotMatch(ui.chip('starter:0','Основа'),/chip-swap-selected|chip-swap-target/);
+});
+test('Reverse click order gives the same roster and flags for each starter and bench slot',()=>{
+ for(const starter of [2,3,4,5,6])for(const bench of [7,8]){
+  const forward=setup(),reverse=setup();
+  forward.choose(starter);forward.choose(bench);
+  reverse.choose(bench);reverse.choose(starter);
+  forward.layout();reverse.layout();
+  assert.equal(JSON.stringify(reverse.current()),JSON.stringify(forward.current()));
+ }
+});
+test('Bench-first reselect and cancellation work; goalkeeper cannot be swapped',()=>{
+ const ui=setup();
+ ui.choose(7);ui.choose(7);
+ assert.doesNotMatch(ui.chip('bench1','Запас 1'),/chip-swap-selected/);
+ assert.doesNotMatch(ui.chip('starter:0','Основа'),/chip-swap-target/);
+ ui.choose(7);ui.choose(8);
+ assert.doesNotMatch(ui.chip('bench1','Запас 1'),/chip-swap-selected/);
+ assert.match(ui.chip('bench2','Запас 2'),/chip-swap-selected/);
  ui.choose(1);
- assert.equal(ui.selected(),null);
  assert.equal(ui.draft[0].slot,'goalkeeper');
  assert.doesNotMatch(ui.chip('goalkeeper','Вратарь'),/data-action="move"/);
  assert.match(ui.chip('bench2','Запас 2'),/data-action="move"/);
+ ui.keeper(1);
+ assert.doesNotMatch(ui.chip('starter:0','Основа'),/chip-swap-target/);
+ assert.match(ui.chip('goalkeeper','Вратарь'),/data-action="cap"/);
 });
 test('After deadline click selection and substitution are blocked',()=>{
  const ui=setup(true);
  ui.choose(2);
  ui.choose(7);
+ ui.choose(2);
  assert.equal(ui.selected(),null);
  assert.equal(ui.draft[1].player_id,2);
  assert.doesNotMatch(ui.chip('starter:0','Основа'),/data-action="move"/);

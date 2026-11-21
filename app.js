@@ -173,23 +173,29 @@ function movePlayer(id){
  const chosenId=Number(id);
  const clicked=draft.find(e=>Number(e.player_id)===chosenId);
  if(!clicked||clicked.slot==='goalkeeper')return;
- if(clicked.slot==='starter'){
+ const isStarter=clicked.slot==='starter';
+ const isBench=e=>e.slot==='bench1'||e.slot==='bench2';
+ if(!isStarter&&!isBench(clicked))return;
+ const selectedBench=draft.find(e=>Number(e.player_id)===selectedPitchId&&isBench(e));
+ const selectedStarter=draft.find(e=>Number(e.player_id)===selectedSwapId&&e.slot==='starter');
+ if(isStarter&&!selectedBench){
    selectedSwapId=selectedSwapId===chosenId?null:chosenId;
    selectedPitchId=null;swapNotice='';
    render();
    return;
  }
- if(clicked.slot!=='bench1'&&clicked.slot!=='bench2')return;
- if(selectedSwapId==null){
+ if(!isStarter&&!selectedStarter){
    selectedPitchId=selectedPitchId===chosenId?null:chosenId;
-   swapNotice='Сначала выбери игрока в основе, затем нажми на запасного.';
+   selectedSwapId=null;swapNotice='';
    render();
    return;
  }
- const starterIndex=draft.findIndex(e=>Number(e.player_id)===selectedSwapId&&e.slot==='starter');
- const benchIndex=draft.findIndex(e=>Number(e.player_id)===chosenId&&(e.slot==='bench1'||e.slot==='bench2'));
+ const starterId=isStarter?chosenId:Number(selectedStarter.player_id);
+ const benchId=isStarter?Number(selectedBench.player_id):chosenId;
+ const starterIndex=draft.findIndex(e=>Number(e.player_id)===starterId&&e.slot==='starter');
+ const benchIndex=draft.findIndex(e=>Number(e.player_id)===benchId&&isBench(e));
  if(starterIndex<0||benchIndex<0){
-   selectedSwapId=null;
+   selectedSwapId=null;selectedPitchId=null;
    swapNotice='Не удалось выполнить замену. Попробуй выбрать игроков заново.';
    render();
    return;
@@ -212,10 +218,10 @@ function movePlayer(id){
 }
 function swapGuideHtml(){
  if(locked())return '';
- const selected=draft.find(e=>Number(e.player_id)===selectedSwapId&&e.slot==='starter');
+ const selected=draft.find(e=>(Number(e.player_id)===selectedSwapId&&e.slot==='starter')||(Number(e.player_id)===selectedPitchId&&['bench1','bench2'].includes(e.slot)));
  const caption=selected
-  ?'Выбран '+esc(byId(selected.player_id)?.name||'игрок основы')+'. Нажми на футболиста в запасе, чтобы поменять их местами. Повторное нажатие отменит выбор.'
-  :swapNotice||'Замена на поле: нажми на футболиста основы, затем на одного из двух запасных.';
+  ?'Выбран '+esc(byId(selected.player_id)?.name||'футболист')+'. Нажми на футболиста '+(selected.slot==='starter'?'в запасе':'в основе')+', чтобы поменять их местами. Повторное нажатие отменит выбор.'
+  :swapNotice||'Чтобы поменять игроков местами, нажми на игрока основы и запасного в любом порядке.';
  return '<div class="swap-guide'+(selected?' swap-guide-active':'')+'" role="status" aria-live="polite">'+
    (selected?'<span class="swap-indicator" aria-hidden="true">⇄</span>':'')+
    '<span>'+caption+'</span></div>';
@@ -295,7 +301,8 @@ function chip(slot,label){
  const points=individual?'<span class="chip-score'+(unusedBench(individual)?' chip-score-unused':'')+'">'+scored(displayedPlayerPoints(individual))+(unusedBench(individual)?' · не вышел':'')+'</span>':'';
  const canEdit=!locked(),canSwap=canEdit&&e.slot!=='goalkeeper';
  const selected=canEdit&&(e.slot==='starter'?selectedSwapId===Number(e.player_id):selectedPitchId===Number(e.player_id));
- const target=canSwap&&(e.slot==='bench1'||e.slot==='bench2')&&selectedSwapId!=null;
+ const benchSelected=draft.some(x=>Number(x.player_id)===selectedPitchId&&['bench1','bench2'].includes(x.slot));
+ const target=canSwap&&((['bench1','bench2'].includes(e.slot)&&selectedSwapId!=null)||(e.slot==='starter'&&benchSelected));
  const tag=canEdit?'button':'div';
  const canAssign=e.slot==='starter'||e.slot==='goalkeeper';
  const roleButtons=canAssign?
