@@ -7,16 +7,16 @@ const sfFields=[
  ['own_goals','Автоголы',0,100]
 ];
 const sfVisibleFields=()=>sfFields.concat(Number(sfAdmin.round?.round_number)>=2
- ?[['goal_difference','Разница мячей команды за вечер (забитые − пропущенные)',-100,100]]
+ ?[['team_wins','Победы команды (+1 за каждую)',0,8],['goal_difference','Разница мячей команды за вечер (забитые − пропущенные)',-100,100]]
  :[['goals_conceded','Пропущено командой за весь вечер',0,100]]);
 function sfDefaultStat(playerId){
  return {player_id:Number(playerId),attended:false,goals:0,assists:0,clean_sheets:0,
-  penalty_saves:0,penalty_misses:0,own_goals:0,goals_conceded:0,goal_difference:0,champion:false};
+  penalty_saves:0,penalty_misses:0,own_goals:0,goals_conceded:0,goal_difference:0,team_wins:0,champion:false};
 }
 function sfCalc(stat,position,roundNumber=1){
  if(!stat?.attended)return 0;
  const n=key=>Number(stat[key]||0);
- return 1+n('goals')*(position==='Вратарь'?10:5)+n('assists')*3+
+ return 1+n('goals')*(position==='Вратарь'?10:5)+n('assists')*3+(Number(roundNumber)>=2?n('team_wins'):0)+
   n('clean_sheets')*(position==='Вратарь'?3:1)+n('penalty_saves')*5-
   n('penalty_misses')*2-n('own_goals')*2-
   (Number(roundNumber)>=2?Math.floor(Math.max(0,-n('goal_difference'))/3):Math.floor(n('goals_conceded')/2))+
@@ -142,7 +142,7 @@ document.addEventListener('change',event=>{
   const stat=sfAdmin.stats[sfAdmin.index];if(!stat)return;
   if(target.id==='sf-attended'){
    stat.attended=target.checked;
-   if(!stat.attended){for(const [field] of [...sfFields,['goals_conceded'],['goal_difference']])stat[field]=0;stat.champion=false;}
+   if(!stat.attended){for(const [field] of [...sfFields,['goals_conceded'],['goal_difference'],['team_wins']])stat[field]=0;stat.champion=false;}
   }else stat.champion=target.checked;
   sfAdmin.dirty=true;render();
  }

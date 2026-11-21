@@ -110,7 +110,7 @@ async function publishedData(client,rounds,players,currentRound){
   // private lineup) is returned to the browser.
   const [stats,rosterEntries]=await Promise.all([
     publishedIds.length?paged(()=>client.from('player_round_stats')
-      .select('round_id,player_id,attended,goals,assists,clean_sheets,penalty_saves,penalty_misses,own_goals,goals_conceded,goal_difference,champion')
+      .select('round_id,player_id,attended,goals,assists,clean_sheets,penalty_saves,penalty_misses,own_goals,goals_conceded,goal_difference,team_wins,champion')
       .in('round_id',publishedIds).order('round_id',{ascending:true}).order('player_id',{ascending:true})):
       Promise.resolve([]),
     paged(()=>client.from('roster_entries')

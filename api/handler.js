@@ -162,7 +162,7 @@ module.exports=async function handler(req,res){
         if(!publication)return send(res,200,{roster:roster||[],published:false});
         const [statResult,playerResult,pointResult]=await Promise.all([
           client.from('player_round_stats')
-            .select('player_id,attended,goals,assists,clean_sheets,penalty_saves,penalty_misses,own_goals,goals_conceded,goal_difference,champion')
+            .select('player_id,attended,goals,assists,clean_sheets,penalty_saves,penalty_misses,own_goals,goals_conceded,goal_difference,team_wins,champion')
             .eq('round_id',roundID),
           client.from('players').select('id,position'),
           client.from('manager_round_points').select('points').eq('round_id',roundID).eq('manager_id',id).maybeSingle()

@@ -34,3 +34,12 @@ test('Round 1 admin retains old conceded-goals input and formula',()=>{
  assert.ok(!names.includes('goal_difference'));
  assert.equal(admin.points({attended:true,goal_difference:-30,goals_conceded:6},'Полевой',1),-2);
 });
+
+test('Win count is editable only from round 2 and included in preview',()=>{
+ const admin=adminFor(2);
+ assert.ok(admin.fields.some(x=>x[0]==='team_wins'));
+ assert.equal(admin.defaultStat(12).team_wins,0);
+ assert.equal(admin.points({attended:true,team_wins:4,clean_sheets:2},'Полевой',2),7);
+ assert.equal(admin.points({attended:true,team_wins:4,clean_sheets:2},'Вратарь',2),11);
+ assert.ok(!adminFor(1).fields.some(x=>x[0]==='team_wins'));
+});
