@@ -43,3 +43,12 @@ test('round 1 remains historically unchanged even if goal_difference is supplied
  assert.equal(playerPoints(sample,'Полевой'),17);
  assert.equal(playerPoints(sample,'Полевой',2),9);
 });
+
+test('Team wins add one each from round 2 for field players and goalkeepers, absent players score zero',()=>{
+ for(const position of ['Вратарь','Полевой']){
+  assert.equal(playerPoints({attended:true,team_wins:5},position,2),6);
+  assert.equal(playerPoints({attended:true,team_wins:5},position,3),6);
+  assert.equal(playerPoints({attended:true,team_wins:5},position,1),1);
+  assert.equal(playerPoints({attended:false,team_wins:5},position,2),0);
+ }
+});
