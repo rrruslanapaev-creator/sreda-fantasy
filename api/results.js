@@ -2,6 +2,7 @@
 const FIELDS=['goals','assists','clean_sheets','penalty_saves','penalty_misses','own_goals','goals_conceded','goal_difference','team_wins'];
 function playerPoints(stat,position,roundNumber=1){
   if(!stat?.attended)return 0;
+  if(Number(roundNumber)===3&&Number(stat.player_id)===14)position='Полевой';
   const n=k=>Number(stat[k]||0);
   return 1+n('goals')*(position==='Вратарь'?10:5)+n('assists')*3+(Number(roundNumber)>=2?n('team_wins'):0)+
     n('clean_sheets')*(position==='Вратарь'?3:1)+n('penalty_saves')*5-
