@@ -114,7 +114,13 @@ async function refresh(){
 }
 function roomFor(p){
  if(!data?.user||locked()||p.active===false||draft.some(e=>e.player_id===p.id)||draft.length>=8||used()+Number(p.price)>50)return false;
- return p.position==='Вратарь'?draft.every(e=>e.slot!=='goalkeeper'):draft.filter(e=>e.slot!=='goalkeeper').length<7;
+ ensureDisplaySlots();
+ return availableSlots(p).some(slot=>!draft.some(e=>e.displaySlot===slot));
+}
+function availableSlots(p){
+ const starters=['starter:0','starter:1','starter:2','starter:3','starter:4'];
+ if(p.position!=='Вратарь')return [...starters,'bench1','bench2'];
+ return spratusRound()&&Number(p.id)===14?['goalkeeper',...starters]:['goalkeeper'];
 }
 function assignFlags(){
  const playing=draft.filter(e=>e.slot==='goalkeeper'||e.slot==='starter');
@@ -129,7 +135,7 @@ function assignFlags(){
 function addPlayer(id){
  const p=byId(id);if(!p||!roomFor(p))return;
  ensureDisplaySlots();
- const slots=p.position==='Вратарь'?['goalkeeper']:['starter:0','starter:1','starter:2','starter:3','starter:4','bench1','bench2'];
+ const slots=availableSlots(p);
  const vacant=slots.filter(slot=>!draft.some(e=>e.displaySlot===slot));
  const displaySlot=vacant.includes(marketTargetSlot)?marketTargetSlot:vacant[0];
  if(!displaySlot)return;
@@ -142,7 +148,7 @@ function removePlayer(id){
  if(locked()||!draft.some(e=>e.player_id===id))return;
  ensureDisplaySlots();
  const removing=draft.find(e=>e.player_id===id),keeper=draft.find(e=>e.slot==='goalkeeper'),spratus=draft.find(isSpratus);
- if(spratusPair(keeper,spratus)&&(removing===keeper||removing===spratus))exchangePitch(keeper,spratus);
+ if(spratusPair(keeper,spratus)&&removing===spratus&&spratus.slot==='starter')exchangePitch(keeper,spratus);
  draft=draft.filter(e=>e.player_id!==id);
  selectedSwapId=null;selectedPitchId=null;marketTargetSlot=null;
  swapNotice='Игрок убран. Нажми на пустую позицию, чтобы выбрать нового на рынке.';
@@ -152,6 +158,10 @@ function fillSlot(slot){
  if(locked()||!data?.user)return;
  ensureDisplaySlots();
  if(!['goalkeeper','starter:0','starter:1','starter:2','starter:3','starter:4','bench1','bench2'].includes(slot)||draft.some(e=>e.displaySlot===slot))return;
+ const selected=draft.find(e=>Number(e.player_id)===selectedSwapId||Number(e.player_id)===selectedPitchId);
+ if(spratusRound()&&slot==='goalkeeper'&&isSpratus(selected)&&selected.slot==='starter'){
+   selected.slot='goalkeeper';selected.displaySlot='goalkeeper';selectedSwapId=null;selectedPitchId=null;marketTargetSlot=null;swapNotice='Спратус вернулся на ворота. Выбери полевого игрока на свободную позицию.';render();return;
+ }
  marketTargetSlot=slot;selectedSwapId=null;selectedPitchId=null;swapNotice='';
  search='';filter=slot==='goalkeeper'?'gk':'field';tab='market';render();
  $('content').scrollIntoView({block:'start',behavior:'instant'});
@@ -241,7 +251,7 @@ function swapGuideHtml(){
  const specialTarget=selected&&draft.some(e=>spratusPair(selected,e));
  const caption=selected
    ?'Выбран '+esc(byId(selected.player_id)?.name||'футболист')+'. '+(specialTarget?(selected.slot==='goalkeeper'?'Нажми на полевого игрока основы или Спратуса, чтобы поменять их местами.':isSpratus(selected)?'Нажми на игрока на воротах, чтобы вернуть Спратуса в ворота.':'Нажми на Спратуса на воротах или запасного, чтобы поменять позиции.') : selected.slot==='goalkeeper'?'Выбери действие с вратарём.':'Нажми на футболиста '+(selected.slot==='starter'?'в запасе':'в основе')+', чтобы поменять их местами.')+' Повторное нажатие отменит выбор.'
-   :swapNotice||(spratusRound()&&draft.some(isSpratus)?'Только в этом туре: нажми на Спратуса и полевого игрока основы в любом порядке, чтобы обменять позиции. Оба получают очки полевого. ':'')+'Чтобы поменять игроков местами, нажми на игрока основы и запасного в любом порядке.';
+   :swapNotice||(spratusRound()&&draft.some(isSpratus)?'Только в этом туре: нажми на Спратуса и полевого игрока основы в любом порядке, чтобы обменять позиции. Оба получают очки полевого. После обмена можно убрать полевого с ворот и взять другого вратаря с рынка. ':'')+'Чтобы поменять игроков местами, нажми на игрока основы и запасного в любом порядке.';
  return '<div class="swap-guide'+(selected?' swap-guide-active':'')+'" role="status" aria-live="polite">'+
    (selected?'<span class="swap-indicator" aria-hidden="true">⇄</span>':'')+
    '<span>'+caption+'</span></div>';
@@ -341,7 +351,7 @@ function chip(slot,label){
   menu+'</div>';
 }
 function marketHtml(){
- const filtered=(data?.players||[]).filter(p=>p.active!==false&&p.name.toLowerCase().includes(search.toLowerCase())&&(filter==='all'||(filter==='gk')===(p.position==='Вратарь')));
+ const filtered=(data?.players||[]).filter(p=>p.active!==false&&p.name.toLowerCase().includes(search.toLowerCase())&&(filter==='all'||(filter==='gk')===(p.position==='Вратарь')||(filter==='field'&&spratusRound()&&Number(p.id)===14)));
  return '<section class="panel"><h2>Рынок игроков</h2><p class="subtle">'+(data?.players||[]).filter(p=>p.active!==false).length+' игроков · бюджет 50.0 · '+(locked()?'Тур закрыт':'Выбирай состав')+'</p>'+
   '<div class="row"><input class="search" id="search" placeholder="Поиск игрока" value="'+esc(search)+'" /><select id="filter" class="field" style="width:auto"><option value="all" '+(filter==='all'?'selected':'')+'>Все</option><option value="gk" '+(filter==='gk'?'selected':'')+'>Вратари</option><option value="field" '+(filter==='field'?'selected':'')+'>Полевые</option></select></div>'+
   '<div class="market-list" id="market-list">'+marketRows(filtered)+'</div></section>';
@@ -351,7 +361,7 @@ function marketRows(players){
  const ordered=players.slice().sort((a,b)=>Number(own.has(Number(b.id)))-Number(own.has(Number(a.id))));
  return ordered.map(p=>{
  const selected=own.has(Number(p.id));
- return '<div class="entry'+(selected?' market-owned':'')+'"><div class="entry-info"><strong>'+esc(p.name)+'</strong><small>'+pos(p)+(selected?' · В твоей команде':'')+'</small></div><strong class="price">'+cash(p.price)+'</strong>'+
+ return '<div class="entry'+(selected?' market-owned':'')+'"><div class="entry-info"><strong>'+esc(p.name)+'</strong><small>'+(spratusRound()&&Number(p.id)===14?'Вратарь / полевой (тур №3)':pos(p))+(selected?' · В твоей команде':'')+'</small></div><strong class="price">'+cash(p.price)+'</strong>'+
   '<button class="small-btn" data-action="'+(selected?'remove':'add')+'" data-id="'+p.id+'" '+((selected?!locked():roomFor(p))?'':'disabled')+'>'+(selected?'Убрать':'Добавить')+'</button></div>';
 }).join('')||'<p class="muted">Игроки не найдены.</p>';}
 // Source of truth: backend aggregates current-round ownership over ALL managers.
@@ -437,7 +447,7 @@ function playerPointsHtml(){
 }
 function rulesHtml(){
  const scoring=[['Участие','+1'],['Гол полевого','+5'],['Гол вратаря','+10'],['Голевая передача','+3'],['Сухой 10-минутный матч полевого','+1'],['Сухой 10-минутный матч вратаря','+3'],['Отбитый пенальти','+5'],['Незабитый пенальти','−2'],['Автогол','−2'],['Победа команды в отдельном матче (с тура №2)','+1 каждому участвовавшему футболисту'],['Чемпион вечера','+2'],['Каждые полные −3 мяча отрицательной разницы команды за вечер (с тура №2)','−1 каждому футболисту'],['Каждые 2 пропущенных гола (только тур №1)','−1 каждому футболисту']];
- return '<section class="panel rules"><h2>Правила Sreda Fantasy</h2>'+ (spratusRound()?'<p><strong>Исключение на тур №3 (25 ноября):</strong> Спратуса можно поменять местами с полевым игроком основы без трансфера. Оба получают очки полевого игрока. В следующем туре Спратус возвращается на позицию вратаря.</p>':'')+'<ul><li>Бюджет — <strong>50.0</strong>. В составе 1 вратарь, 5 полевых в основе и 2 полевых в запасе.</li><li>Обычно доступно <strong>2 трансфера за тур</strong>, они не переносятся. В турах с режимом свободной пересборки число трансферов не ограничено.</li><li>Дедлайн текущего тура — <strong>'+esc(displayDeadline(data?.round?.deadline_at))+' по Риге</strong>. Обычно дедлайн по средам в 20:30, но время может меняться от тура к туру. После дедлайна изменения заблокированы.</li><li>При отсутствии полевого игрока основы вступает присутствующий запасной, по приоритету 1 → 2. Вратарь без замены.</li><li>Капитан получает ×2, если присутствовал. Если нет — ×2 получает присутствующий вице-капитан.</li></ul><h2>Очки за игру</h2><table class="league">'+scoring.map(s=>'<tr><td>'+s[0]+'</td><td>'+s[1]+'</td></tr>').join('')+'</table><h2>Бонусы сезона — пока недоступны</h2><p class="muted"><strong>В этом туре бусты не активируются и не влияют на результат.</strong> Планируется включить их отдельно со следующего тура. После включения можно будет использовать один бонус за тур, каждый вид — один раз за сезон.</p><ul><li><strong>Бенч-буст:</strong> оба присутствовавших запасных приносят свои очки, даже если не требовалась автозамена.</li><li><strong>Тройной капитан:</strong> очки сыгравшего капитана ×3. Если капитан отсутствовал, ×3 получает сыгравший вице-капитан.</li><li><strong>Фри-хит:</strong> неограниченные трансферы на один тур. В следующем туре возвращается прежняя восьмёрка, позиции и капитаны.</li><li><strong>Вайлдкард:</strong> неограниченные трансферы с сохранением нового состава на следующие туры.</li></ul><p class="muted"><strong>Начиная с тура №2 (18 ноября 2026):</strong> штраф зависит от итоговой разницы мячей команды (забитые − пропущенные за весь вечер), а не от числа пропущенных голов. Разница −1 или −2 не штрафуется, −3…−5 даёт −1, −6…−8 даёт −2 и так далее. При нулевой или положительной разнице штрафа нет. За каждую победу команды начисляется отдельный бонус +1 каждому сыгравшему футболисту, включая вратаря; ничья не даёт бонуса. Штраф применяется к каждому участвовавшему футболисту, в том числе вратарю; капитанские очки удваиваются. <strong>Результаты тура №1 не пересчитываются.</strong></p></section>';
+ return '<section class="panel rules"><h2>Правила Sreda Fantasy</h2>'+ (spratusRound()?'<p><strong>Исключение на тур №3 (25 ноября):</strong> Спратуса можно поменять местами с полевым игроком основы без трансфера. Оба получают очки полевого игрока. Если Спратус в основе на поле, можно взять другого вратаря на ворота обычным трансфером, в пределах бюджета и 8 игроков. В следующем туре Спратус возвращается на ворота, а второй вратарь покидает состав.</p>':'')+'<ul><li>Бюджет — <strong>50.0</strong>. В составе 1 вратарь, 5 полевых в основе и 2 полевых в запасе.</li><li>Обычно доступно <strong>2 трансфера за тур</strong>, они не переносятся. В турах с режимом свободной пересборки число трансферов не ограничено.</li><li>Дедлайн текущего тура — <strong>'+esc(displayDeadline(data?.round?.deadline_at))+' по Риге</strong>. Обычно дедлайн по средам в 20:30, но время может меняться от тура к туру. После дедлайна изменения заблокированы.</li><li>При отсутствии полевого игрока основы вступает присутствующий запасной, по приоритету 1 → 2. Вратарь без замены.</li><li>Капитан получает ×2, если присутствовал. Если нет — ×2 получает присутствующий вице-капитан.</li></ul><h2>Очки за игру</h2><table class="league">'+scoring.map(s=>'<tr><td>'+s[0]+'</td><td>'+s[1]+'</td></tr>').join('')+'</table><h2>Бонусы сезона — пока недоступны</h2><p class="muted"><strong>В этом туре бусты не активируются и не влияют на результат.</strong> Планируется включить их отдельно со следующего тура. После включения можно будет использовать один бонус за тур, каждый вид — один раз за сезон.</p><ul><li><strong>Бенч-буст:</strong> оба присутствовавших запасных приносят свои очки, даже если не требовалась автозамена.</li><li><strong>Тройной капитан:</strong> очки сыгравшего капитана ×3. Если капитан отсутствовал, ×3 получает сыгравший вице-капитан.</li><li><strong>Фри-хит:</strong> неограниченные трансферы на один тур. В следующем туре возвращается прежняя восьмёрка, позиции и капитаны.</li><li><strong>Вайлдкард:</strong> неограниченные трансферы с сохранением нового состава на следующие туры.</li></ul><p class="muted"><strong>Начиная с тура №2 (18 ноября 2026):</strong> штраф зависит от итоговой разницы мячей команды (забитые − пропущенные за весь вечер), а не от числа пропущенных голов. Разница −1 или −2 не штрафуется, −3…−5 даёт −1, −6…−8 даёт −2 и так далее. При нулевой или положительной разнице штрафа нет. За каждую победу команды начисляется отдельный бонус +1 каждому сыгравшему футболисту, включая вратаря; ничья не даёт бонуса. Штраф применяется к каждому участвовавшему футболисту, в том числе вратарю; капитанские очки удваиваются. <strong>Результаты тура №1 не пересчитываются.</strong></p></section>';
 }
 function render(){
  if(!data)return;
@@ -581,7 +591,7 @@ document.addEventListener('input',event=>{
  }
  if(event.target.id!=='search')return;
  search=event.target.value;
- const filtered=(data?.players||[]).filter(p=>p.active!==false&&p.name.toLowerCase().includes(search.toLowerCase())&&(filter==='all'||(filter==='gk')===(p.position==='Вратарь')));
+ const filtered=(data?.players||[]).filter(p=>p.active!==false&&p.name.toLowerCase().includes(search.toLowerCase())&&(filter==='all'||(filter==='gk')===(p.position==='Вратарь')||(filter==='field'&&spratusRound()&&Number(p.id)===14)));
  $('market-list').innerHTML=marketRows(filtered);
 });
 document.addEventListener('change',event=>{if(event.target.id==='filter'){filter=event.target.value;render();}});
