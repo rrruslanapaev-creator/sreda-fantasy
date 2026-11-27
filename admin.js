@@ -6,9 +6,13 @@ const sfFields=[
  ['penalty_saves','Отбитые пенальти',0,100],['penalty_misses','Незабитые пенальти',0,100],
  ['own_goals','Автоголы',0,100]
 ];
-const sfVisibleFields=()=>sfFields.concat(Number(sfAdmin.round?.round_number)>=2
- ?[['team_wins','Победы команды (+1 за каждую)',0,8],['goal_difference','Разница мячей команды за вечер (забитые − пропущенные)',-100,100]]
+const sfVisibleFields=()=>{
+ const round=Number(sfAdmin.round?.round_number),p=sfAdmin.players?.[sfAdmin.index];
+ const keeper=round>=3&&p?.position==='Вратарь'&&!(round===3&&Number(p.id)===14);
+ return sfFields.concat(round>=2
+ ?[['team_wins','Победы команды (+1 за каждую)',0,8],keeper?['goals_conceded','Пропущено вратарём за весь вечер',0,100]:['goal_difference','Разница мячей команды за вечер (забитые − пропущенные)',-100,100]]
  :[['goals_conceded','Пропущено командой за весь вечер',0,100]]);
+};
 function sfDefaultStat(playerId){
  return {player_id:Number(playerId),attended:false,goals:0,assists:0,clean_sheets:0,
   penalty_saves:0,penalty_misses:0,own_goals:0,goals_conceded:0,goal_difference:0,team_wins:0,champion:false};
@@ -20,7 +24,7 @@ function sfCalc(stat,position,roundNumber=1){
  return 1+n('goals')*(position==='Вратарь'?10:5)+n('assists')*3+(Number(roundNumber)>=2?n('team_wins'):0)+
   n('clean_sheets')*(position==='Вратарь'?3:1)+n('penalty_saves')*5-
   n('penalty_misses')*2-n('own_goals')*2-
-  (Number(roundNumber)>=2?Math.floor(Math.max(0,-n('goal_difference'))/3):Math.floor(n('goals_conceded')/2))+
+  (Number(roundNumber)>=3&&position==='Вратарь'?Math.floor(n('goals_conceded')/3):Number(roundNumber)>=2?Math.floor(Math.max(0,-n('goal_difference'))/3):Math.floor(n('goals_conceded')/2))+
   (stat.champion?2:0);
 }
 async function sfLoad(roundId){
@@ -74,7 +78,7 @@ function sfHtml(){
   '<div class="sf-stats-grid">'+statsInputs+'</div>'+
   '<div class="sf-preview"><span>Очки футболиста</span><strong id="sf-preview-points">'+score+'</strong></div>'+
   '<p class="muted">'+(Number(round.round_number)>=2
-    ?'Начиная с тура №2: введи для каждого участника <strong>разницу мячей его команды за весь вечер</strong> (все забитые минус все пропущенные). Отрицательные значения вводятся со знаком минус. За каждые полные −3 мяча — штраф −1; −1 и −2 без штрафа, положительная разница не даёт бонусов.'
+    ?(Number(round.round_number)>=3&&p.position==='Вратарь'&&!(Number(round.round_number)===3&&Number(p.id)===14)?'Введи число голов, пропущенных вратарём за вечер. Штраф −1 за каждые три полных пропущенных мяча.':'Введи разницу мячей команды за вечер (забитые минус пропущенные). За каждые полные −3 мяча штраф −1.')
     :'Тур №1: штраф −1 за каждые два гола, пропущенных командой футболиста за весь вечер. Это правило сохраняется в истории.')+'</p>'+
   '</section><section class="panel"><h2>Сохранение и публикация</h2>'+
   '<p class="subtle">Сначала заполни всех игравших футболистов, затем сохрани статистику. Можно исправить значения и пересчитать повторно.</p>'+

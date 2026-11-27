@@ -73,7 +73,7 @@ function buildSeason(players,stats,publishedIds,ownership,managerCount,roundNumb
 function scoredRoster(roster,stats,players,roundNumber=1){
   const playerById=new Map(players.map(p=>[String(p.id),p]));
   const statById=new Map(stats.map(s=>[String(s.player_id),s]));
-  const presence=e=>statById.get(String(e.player_id))?.attended===true;
+  const presence=e=>!(Number(roundNumber)===3&&Number(e.player_id)===14&&e.slot==='goalkeeper')&&statById.get(String(e.player_id))?.attended===true;
   const playing=roster.filter(e=>(e.slot==='goalkeeper'||e.slot==='starter')&&presence(e));
   const presentOutfield=playing.filter(e=>e.slot==='starter').length;
   const bench=roster.filter(e=>(e.slot==='bench1'||e.slot==='bench2')&&presence(e))
@@ -87,7 +87,7 @@ function scoredRoster(roster,stats,players,roundNumber=1){
     const id=String(e.player_id);
     const stat=statById.get(id);
     const player=playerById.get(id);
-    const raw=player?playerPoints(stat,player.position,roundNumber):0;
+    const raw=player&&!(Number(roundNumber)===3&&Number(e.player_id)===14&&e.slot==='goalkeeper')?playerPoints(stat,player.position,roundNumber):0;
     const counted=selected.has(id);
     const multiplier=counted&&id===doubledId?2:1;
     return {

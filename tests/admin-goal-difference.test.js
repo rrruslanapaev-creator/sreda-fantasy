@@ -43,3 +43,10 @@ test('Win count is editable only from round 2 and included in preview',()=>{
  assert.equal(admin.points({attended:true,team_wins:4,clean_sheets:2},'Вратарь',2),11);
  assert.ok(!adminFor(1).fields.some(x=>x[0]==='team_wins'));
 });
+
+test('round 3 keeper input and preview use conceded goals',()=>{
+ const admin=vm.runInNewContext("const sfAdmin={round:{round_number:3},players:[{id:41,position:'Вратарь'}],index:0};"+scoring+";({fields:sfVisibleFields(),points:sfCalc})");
+ assert.ok(admin.fields.some(x=>x[0]==='goals_conceded'));
+ assert.ok(!admin.fields.some(x=>x[0]==='goal_difference'));
+ assert.equal(admin.points({attended:true,player_id:41,clean_sheets:5,goals_conceded:9},'Вратарь',3),13);
+});

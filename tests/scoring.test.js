@@ -52,3 +52,10 @@ test('Team wins add one each from round 2 for field players and goalkeepers, abs
   assert.equal(playerPoints({attended:false,team_wins:5},position,2),0);
  }
 });
+
+test('round 3 keeper penalty uses conceded goals, not goal difference',()=>{
+ assert.equal(playerPoints({attended:true,player_id:41,clean_sheets:5,goals_conceded:9,goal_difference:-9},'Вратарь',3),13);
+ assert.equal(playerPoints({attended:true,player_id:35,clean_sheets:2,goals_conceded:19},'Вратарь',3),1);
+ assert.equal(playerPoints({attended:true,player_id:35,goals_conceded:2},'Вратарь',4),1);
+ assert.equal(playerPoints({attended:true,player_id:14,goals:4,assists:1,team_wins:5,champion:true,goals_conceded:19},'Вратарь',3),31);
+});

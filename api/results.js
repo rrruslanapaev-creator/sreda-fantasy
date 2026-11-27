@@ -6,7 +6,7 @@ function playerPoints(stat,position,roundNumber=1){
   const n=k=>Number(stat[k]||0);
   return 1+n('goals')*(position==='Вратарь'?10:5)+n('assists')*3+(Number(roundNumber)>=2?n('team_wins'):0)+
     n('clean_sheets')*(position==='Вратарь'?3:1)+n('penalty_saves')*5-
-    n('penalty_misses')*2-n('own_goals')*2-(Number(roundNumber)>=2?Math.floor(Math.max(0,-n('goal_difference'))/3):Math.floor(n('goals_conceded')/2))+
+    n('penalty_misses')*2-n('own_goals')*2-(Number(roundNumber)>=3&&position==='Вратарь'?Math.floor(n('goals_conceded')/3):Number(roundNumber)>=2?Math.floor(Math.max(0,-n('goal_difference'))/3):Math.floor(n('goals_conceded')/2))+
     (stat.champion?2:0);
 }
 function roundId(value){
